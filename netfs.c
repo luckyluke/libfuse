@@ -50,6 +50,11 @@ struct fuse_dirhandle {
   char *filename;
 };
 
+/* Lookup NAME in DIR for USER; set *NODE to the found name upon return.  If
+   the name was not found, then return ENOENT.  On any error, clear *NODE.
+   (*NODE, if found, should be locked, DIR is locked and shall stay locked. */
+static error_t __netfs_attempt_lookup(struct iouser *user, struct node *dir,
+				      char *name, struct node **node);
 
 /* Make sure that NP->nn_stat is filled with current information.  CRED
    identifies the user responsible for the operation.  */
@@ -451,13 +456,12 @@ error_t netfs_attempt_unlink (struct iouser *user, struct node *dir,
   if(! fuse_ops->unlink)
     goto out;
 
-  err = netfs_attempt_lookup(user, dir, name, &node);
-  mutex_lock(&dir->lock);
+  err = __netfs_attempt_lookup(user, dir, name, &node);
+  /* mutex_lock(&dir->lock); */
   
   if(err)
-    goto out;
+    goto out_nonrele;
 
-  netfs_nref(node);
   mutex_unlock(&node->lock);
 
   if((err = netfs_validate_stat(dir, user))
@@ -470,9 +474,9 @@ error_t netfs_attempt_unlink (struct iouser *user, struct node *dir,
   /* TODO free associated netnode. really? 
    * FIXME, make sure nn->may_need_sync is set */
  out:
-  if(node)
-    netfs_nrele(node);
+  netfs_nrele(node);
 
+ out_nonrele:
   FUNC_EPILOGUE(err);
 }
 
@@ -607,8 +611,22 @@ fuse_lookup_helper(fuse_dirh_t handle, const char *name, int type)
    the name was not found, then return ENOENT.  On any error, clear *NODE.
    (*NODE, if found, should be locked, this call should unlock DIR no matter
    what.) */
-error_t netfs_attempt_lookup (struct iouser *user, struct node *dir,
-			      char *name, struct node **node)
+error_t netfs_attempt_lookup(struct iouser *user, struct node *dir,
+			     char *name, struct node **node)
+{
+  FUNC_PROLOGUE_FMT("netfs_attempt_lookup", "name=%s, dir=%s",
+		    name, dir->nn->path);
+
+  error_t err = __netfs_attempt_lookup(user, dir, name, node);
+  mutex_unlock(&dir->lock);
+
+  FUNC_EPILOGUE(err);
+}
+
+/* like netfs_attempt_lookup, but don't unlock DIR */
+static error_t
+__netfs_attempt_lookup(struct iouser *user, struct node *dir,
+		       char *name, struct node **node)
 {
   FUNC_PROLOGUE_FMT("netfs_attempt_lookup", "name=%s, dir=%s",
 		    name, dir->nn->path);
@@ -692,8 +710,6 @@ error_t netfs_attempt_lookup (struct iouser *user, struct node *dir,
     }
 
 out:
-  mutex_unlock(&dir->lock);
-
   if(err)
     *node = NULL;
   else
@@ -720,10 +736,8 @@ error_t netfs_attempt_link (struct iouser *user, struct node *dir,
 
   mutex_lock(&dir->lock);
 
-  if((err = netfs_attempt_lookup(user, dir, name, &node)))
-    goto out_nounlock; /* netfs_attempt_lookup unlocked dir */
-
-  mutex_lock(&dir->lock);
+  if((err = __netfs_attempt_lookup(user, dir, name, &node)))
+    goto out;
 
   if((err = netfs_validate_stat(node, user))
      || (err = fshelp_checkdirmod(&dir->nn_stat, &node->nn_stat, user)))
@@ -764,7 +778,12 @@ error_t netfs_attempt_link (struct iouser *user, struct node *dir,
 
  out:
   mutex_unlock(&dir->lock);
-  mutex_unlock(&node->lock);
+
+  if(node) 
+    {
+      mutex_unlock(&node->lock);
+      netfs_nrele(node);
+    }
 
  out_nounlock:
   FUNC_EPILOGUE(err);
@@ -784,8 +803,7 @@ error_t netfs_attempt_rmdir (struct iouser *user,
   if(! fuse_ops->rmdir)
     goto out_nounlock;
 
-  err = netfs_attempt_lookup(user, dir, name, &node);
-  mutex_lock(&dir->lock); /* netfs_attempt_lookup unlocked dir */
+  err = __netfs_attempt_lookup(user, dir, name, &node);
 
   if(err)
     goto out_nounlock; 
@@ -801,6 +819,7 @@ error_t netfs_attempt_rmdir (struct iouser *user,
 
  out:
   mutex_unlock(&node->lock);
+  netfs_nrele(node);
 
  out_nounlock:
   FUNC_EPILOGUE(err);
@@ -928,7 +947,9 @@ error_t netfs_attempt_rename (struct iouser *user, struct node *fromdir,
  out:
   free(topath);
   mutex_unlock(&todir->lock);
+  
   mutex_unlock(&fromnode->lock);
+  netfs_nrele(fromnode);
 
  out_nounlock:
   FUNC_EPILOGUE(err);

@@ -61,6 +61,8 @@ static error_t __netfs_attempt_lookup(struct iouser *user, struct node *dir,
 error_t
 netfs_validate_stat (struct node *node, struct iouser *cred)
 {
+  (void) cred;
+
   FUNC_PROLOGUE_NODE("netfs_validate_stat", node);
   error_t err = EOPNOTSUPP;
 
@@ -204,6 +206,8 @@ error_t
 netfs_attempt_statfs (struct iouser *cred, struct node *node,
 		      fsys_statfsbuf_t *st)
 {
+  (void) cred;
+
   FUNC_PROLOGUE_NODE("netfs_attempt_statfs", node);
   error_t err = EOPNOTSUPP;
 
@@ -272,6 +276,9 @@ error_t netfs_attempt_mkdir (struct iouser *user, struct node *dir,
 error_t netfs_attempt_chflags (struct iouser *cred, struct node *node,
 			       int flags)
 {
+  (void) cred;
+  (void) flags;
+
   FUNC_PROLOGUE_NODE("netfs_attempt_chflags", node);
   NOT_IMPLEMENTED();
   FUNC_EPILOGUE(EOPNOTSUPP);
@@ -286,6 +293,8 @@ error_t
 netfs_check_open_permissions (struct iouser *user, struct node *node,
 			      int flags, int newnode)
 {
+  (void) newnode;
+
   FUNC_PROLOGUE_NODE("netfs_check_open_permissions", node);
   error_t err = 0;
 
@@ -596,6 +605,9 @@ netfs_report_access (struct iouser *cred, struct node *node, int *types)
 static int
 fuse_lookup_helper(fuse_dirh_t handle, const char *name, int type)
 {
+  (void) type; /* we want to know whether the file exists at all,
+		* the type is not of any interest */
+
   if(! strcmp(name, handle->filename))
     {
       handle->found = 1;
@@ -832,6 +844,9 @@ error_t netfs_attempt_rmdir (struct iouser *user,
 error_t netfs_attempt_chauthor (struct iouser *cred, struct node *node,
 				uid_t author)
 {
+  (void) cred;
+  (void) author;
+
   FUNC_PROLOGUE_NODE("netfs_attempt_chauthor", node);
   NOT_IMPLEMENTED();
   FUNC_EPILOGUE(EROFS);
@@ -965,7 +980,6 @@ error_t netfs_attempt_write (struct iouser *cred, struct node *node,
 {
   FUNC_PROLOGUE_NODE("netfs_attempt_write", node);
   error_t err = EOPNOTSUPP;
-  size_t sz;
 
   if(! fuse_ops->write)
     goto out;
@@ -974,7 +988,7 @@ error_t netfs_attempt_write (struct iouser *cred, struct node *node,
      || (err = fshelp_access(&node->nn_stat, S_IWRITE, cred)))
     goto out;
 
-  sz = fuse_ops->write(node->nn->path, data, *len, offset);
+  int sz = fuse_ops->write(node->nn->path, data, *len, offset);
 
   if(sz < 0)
     err = -sz;
@@ -1044,7 +1058,7 @@ error_t netfs_attempt_read (struct iouser *cred, struct node *node,
      || (err = fshelp_access(&node->nn_stat, S_IREAD, cred)))
     goto out;
 
-  size_t sz = fuse_ops->read(node->nn->path, data, *len, offset);
+  int sz = fuse_ops->read(node->nn->path, data, *len, offset);
 
   if(sz < 0)
     err = -sz;
@@ -1077,6 +1091,9 @@ error_t netfs_attempt_read (struct iouser *cred, struct node *node,
 static int
 fuse_bump_helper(fuse_dirh_t handle, const char *name, int type)
 {
+  (void) type; /* we just allocate the memory, type is not of interest
+		* for that .. */
+
   if(handle->first_entry)
     {
       /* skip this entry, it's before the first one we got to write out ... */
@@ -1086,7 +1103,7 @@ fuse_bump_helper(fuse_dirh_t handle, const char *name, int type)
 
   if(handle->num_entries || handle->count < handle->num_entries)
     {
-      size_t name_len = strlen(name);
+      int name_len = strlen(name);
       size_t new_size = handle->size + DIRENT_LEN(name_len);
 
       handle->max_name_len =

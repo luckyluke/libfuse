@@ -73,7 +73,12 @@ static int xmp_mknod(const char *path, mode_t mode, dev_t rdev)
 {
     int res;
 
-    res = mknod(path, mode, rdev);
+    /* On the Hurd we must not use mknod() to create files, but creat() */
+    if(mode & S_IFREG)
+      res = creat(path, mode & ALLPERMS);
+    else
+      res = mknod(path, mode, rdev);
+
     if(res == -1)
         return -errno;
 

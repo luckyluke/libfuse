@@ -64,6 +64,14 @@ netfs_validate_stat (struct node *node, struct iouser *cred)
   if(fuse_ops->getattr)
     err = -fuse_ops->getattr(node->nn->path, &node->nn_stat);
 
+  if(! err)
+    {
+      node->nn_stat.st_ino = node->nn->inode;
+      node->nn_stat.st_dev = getpid();
+      node->nn_stat.st_blksize = 1 << 12; /* there's probably no sane default,
+					   * use 4 kB for the moment */
+    }
+
   FUNC_EPILOGUE(err);
 }
 

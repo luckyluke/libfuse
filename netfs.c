@@ -146,8 +146,12 @@ error_t netfs_attempt_chown (struct iouser *cred, struct node *node,
 			     uid_t uid, uid_t gid)
 {
   FUNC_PROLOGUE_NODE("netfs_attempt_chown", node);
-  NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(EROFS);
+  error_t err = EROFS;
+
+  if(fuse_ops->chown)
+    err = -fuse_ops->chown(node->nn->path, uid, gid);
+
+  FUNC_EPILOGUE(err);
 }
 
 

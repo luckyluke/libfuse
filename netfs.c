@@ -74,9 +74,14 @@ error_t netfs_attempt_readlink (struct iouser *user, struct node *node,
   FUNC_PROLOGUE_NODE("netfs_attempt_readlink", node);
   error_t err = EOPNOTSUPP;
 
+  if((err = netfs_validate_stat(node, user))
+     || (err = fshelp_access(&node->nn_stat, S_IREAD, user)))
+    goto out;
+
   if(fuse_ops->readlink)
     err = -fuse_ops->readlink(node->nn->path, buf, INT_MAX);
 
+ out:
   FUNC_EPILOGUE(err);
 }
 
@@ -94,6 +99,10 @@ netfs_attempt_create_file (struct iouser *user, struct node *dir,
   char *path = NULL;
 
   if(! fuse_ops->mknod)
+    goto out;
+
+  if((err = netfs_validate_stat(dir, user))
+     || (err = fshelp_checkdirmod(&dir->nn_stat, NULL, user)))
     goto out;
 
   if(! (path = malloc(strlen(dir->nn->path) + strlen(name) + 2)))
@@ -163,12 +172,22 @@ error_t netfs_attempt_chown (struct iouser *cred, struct node *node,
   FUNC_PROLOGUE_NODE("netfs_attempt_chown", node);
   error_t err = EOPNOTSUPP;
 
-  if(fuse_ops->chown)
-    {
-      err = -fuse_ops->chown(node->nn->path, uid, gid);
-      node->nn->may_need_sync = 1;
-    }
+  if(! fuse_ops->chown)
+    goto out;
 
+  if((err = netfs_validate_stat(node, cred))
+     || (err = fshelp_isowner(&node->nn_stat, cred)))
+    goto out;
+
+  /* FIXME, make sure, that user CRED is not able to change permissions
+   * to somebody who is not. That is, don't allow $unpriv_user to change
+   * owner to e.g. root.
+   */
+
+  err = -fuse_ops->chown(node->nn->path, uid, gid);
+  node->nn->may_need_sync = 1;
+  
+ out:
   FUNC_EPILOGUE(err);
 }
 
@@ -201,6 +220,10 @@ error_t netfs_attempt_mkdir (struct iouser *user, struct node *dir,
   char *path = NULL;
 
   if(! fuse_ops->mkdir)
+    goto out;
+
+  if((err = netfs_validate_stat(dir, user))
+     || (err = fshelp_checkdirmod(&dir->nn_stat, NULL, user)))
     goto out;
 
   if(! (path = malloc(strlen(dir->nn->path) + strlen(name) + 2)))
@@ -261,28 +284,27 @@ netfs_check_open_permissions (struct iouser *user, struct node *node,
   FUNC_PROLOGUE_NODE("netfs_check_open_permissions", node);
   error_t err = 0;
 
-  if(fuse_ops->open)
+  if((err = netfs_validate_stat(node, user)))
+    goto out;
+
+  if (flags & O_READ)
+    err = fshelp_access (&node->nn_stat, S_IREAD, user);
+      
+  if (!err && (flags & O_WRITE))
+    err = fshelp_access (&node->nn_stat, S_IWRITE, user);
+      
+  if (!err && (flags & O_EXEC))
+    err = fshelp_access (&node->nn_stat, S_IEXEC, user);
+
+  if (!err && fuse_ops->open)
     {
       err = -fuse_ops->open(node->nn->path, flags);
 
       if(! err && fuse_ops->release)
 	(void)fuse_ops->release(node->nn->path, flags);
     }
-  else
-    {
-      /* the fuse translator doesn't bring an open routine with it.
-       * try to figure out whether writing should be okay
-       */
-      if (flags & O_READ)
-	err = fshelp_access (&node->nn_stat, S_IREAD, user);
-      
-      if (!err && (flags & O_WRITE))
-	err = fshelp_access (&node->nn_stat, S_IWRITE, user);
-      
-      if (!err && (flags & O_EXEC))
-	err = fshelp_access (&node->nn_stat, S_IEXEC, user);
-    }
 
+ out:
   FUNC_EPILOGUE(err);
 }
 
@@ -299,12 +321,17 @@ error_t netfs_attempt_chmod (struct iouser *cred, struct node *node,
   FUNC_PROLOGUE_NODE("netfs_attempt_chmod", node);
   error_t err = EOPNOTSUPP;
 
-  if(fuse_ops->chmod)
-    {
-      err = -fuse_ops->chmod(node->nn->path, mode);
-      node->nn->may_need_sync = 1;
-    }
+  if(! fuse_ops->chmod)
+    goto out;
 
+  if((err = netfs_validate_stat(node, cred))
+     || (err = fshelp_isowner(&node->nn_stat, cred)))
+    goto out;
+
+  err = -fuse_ops->chmod(node->nn->path, mode);
+  node->nn->may_need_sync = 1;
+  
+ out:
   FUNC_EPILOGUE(err);
 }
 
@@ -320,7 +347,11 @@ error_t netfs_attempt_mkfile (struct iouser *user, struct node *dir,
   char name[20];
   static int num = 0;
 
-  if(! fuse_ops->mknod)
+  if(fuse_ops->mknod)
+    if(! (err = netfs_validate_stat(dir, user)))
+      err = fshelp_checkdirmod(&dir->nn_stat, NULL, user);
+
+  if(err)
     {
       /* dir has to be unlocked no matter what ... */
       mutex_unlock (&dir->lock);
@@ -384,19 +415,24 @@ error_t netfs_attempt_syncfs (struct iouser *cred, int wait)
 error_t
 netfs_attempt_sync (struct iouser *cred, struct node *node, int wait)
 {
-  (void) cred;   /* cannot use anything but translator's rights,
-		  * FIXME, maybe setuid/setgid? */
   (void) wait;   /* there's no such flag in libfuse */
 
   FUNC_PROLOGUE_NODE("netfs_attempt_sync", node);
   error_t err = EOPNOTSUPP;
 
-  if(fuse_ops->fsync)
-    err = -fuse_ops->fsync(node->nn->path, 0);
+  if(! fuse_ops->fsync)
+    goto out;
+
+  if((err = netfs_validate_stat(node, cred))
+     || (err = fshelp_access(&node->nn_stat, S_IWRITE, cred)))
+    goto out;
+
+  err = -fuse_ops->fsync(node->nn->path, 0);
     
   if(! err)
     node->nn->may_need_sync = 0; 
 
+ out:
   FUNC_EPILOGUE(err);
 }
 
@@ -410,24 +446,32 @@ error_t netfs_attempt_unlink (struct iouser *user, struct node *dir,
 {
   FUNC_PROLOGUE("netfs_attempt_unlink");
   error_t err = EOPNOTSUPP;
-  char *path = NULL;
+  struct node *node;
 
   if(! fuse_ops->unlink)
-    return err; /* EOPNOTSUPP */
+    goto out;
 
-  if(! (path = malloc(strlen(name) + strlen(dir->nn->path) + 2)))
-    {
-      err = ENOMEM;
-      goto out;
-    }
+  err = netfs_attempt_lookup(user, dir, name, &node);
+  mutex_lock(&dir->lock);
+  
+  if(err)
+    goto out;
 
-  sprintf(path, "%s/%s", dir->nn->path, name);
-  err = -fuse_ops->unlink(path);
+  netfs_nref(node);
+  mutex_unlock(&node->lock);
+
+  if((err = netfs_validate_stat(dir, user))
+     || (err = netfs_validate_stat(node, user))
+     || (err = fshelp_checkdirmod(&dir->nn_stat, &node->nn_stat, user)))
+    goto out;
+
+  err = -fuse_ops->unlink(node->nn->path);
 
   /* TODO free associated netnode. really? 
    * FIXME, make sure nn->may_need_sync is set */
  out:
-  free(path);
+  if(node)
+    netfs_nrele(node);
 
   FUNC_EPILOGUE(err);
 }
@@ -442,9 +486,16 @@ error_t netfs_attempt_set_size (struct iouser *cred, struct node *node,
   FUNC_PROLOGUE_NODE("netfs_attempt_set_size", node);
   error_t err = EOPNOTSUPP;
 
-  if(fuse_ops->truncate)
-    err = -fuse_ops->truncate(node->nn->path, size);
+  if(! fuse_ops->truncate)
+    goto out;
 
+  if((err = netfs_validate_stat(node, cred))
+     || (err = fshelp_access(&node->nn_stat, S_IWRITE, cred)))
+    goto out;
+
+  err = -fuse_ops->truncate(node->nn->path, size);
+
+ out:
   FUNC_EPILOGUE(err);
 }
 
@@ -465,6 +516,15 @@ error_t netfs_attempt_mkdev (struct iouser *cred, struct node *node,
    * available, we cannot turn *node into a device.
    */
   if(! fuse_ops->unlink)
+    goto out;
+
+  /* check permissions
+   * XXX, shall we check permissions of the parent directory as well,
+   * since we're going to unlink files?
+   */
+
+  if((err = netfs_validate_stat(node, cred))
+     || (err = fshelp_access(&node->nn_stat, S_IWRITE, cred)))
     goto out;
 
   /* unlink the already existing node, to be able to create the (new)
@@ -505,10 +565,12 @@ error_t
 netfs_report_access (struct iouser *cred, struct node *node, int *types)
 {
   FUNC_PROLOGUE_NODE("netfs_report_access", node);
+  error_t err;
   *types = 0;
 
-  (void) netfs_validate_stat(node, cred);
-
+  if((err = netfs_validate_stat(node, cred)))
+    goto out;
+  
   if (fshelp_access (&node->nn_stat, S_IREAD, cred) == 0)
     *types |= O_READ;
   
@@ -518,6 +580,7 @@ netfs_report_access (struct iouser *cred, struct node *node, int *types)
   if (fshelp_access (&node->nn_stat, S_IEXEC, cred) == 0)
     *types |= O_EXEC;
   
+ out:
   FUNC_EPILOGUE(0);
 }
 
@@ -550,7 +613,14 @@ error_t netfs_attempt_lookup (struct iouser *user, struct node *dir,
   FUNC_PROLOGUE_FMT("netfs_attempt_lookup", "name=%s, dir=%s",
 		    name, dir->nn->path);
 
-  error_t err = ENOENT;
+  error_t err;
+
+  if((err = netfs_validate_stat(dir, user))
+     || (err = fshelp_access(&dir->nn_stat, S_IREAD, user))
+     || (err = fshelp_access(&dir->nn_stat, S_IEXEC, user)))
+    goto out;
+  else
+    err = ENOENT; /* default to return ENOENT */
 
   if(! strcmp(name, "."))
     {
@@ -643,29 +713,30 @@ error_t netfs_attempt_link (struct iouser *user, struct node *dir,
   FUNC_PROLOGUE_FMT("netfs_attempt_link", "link=%s/%s, to=%s",
 		    dir->nn->path, name, file->nn->path);
   error_t err = EOPNOTSUPP;
-  char *path = NULL;
+  struct node *node = NULL;
 
   if(! fuse_ops->link)
-    return err; /* EOPNOTSUPP */
+    goto out_nounlock;
 
   mutex_lock(&dir->lock);
 
-  if(! (path = malloc(strlen(name) + strlen(dir->nn->path) + 2)))
-    {
-      err = ENOMEM;
-      goto out;
-    }
+  if((err = netfs_attempt_lookup(user, dir, name, &node)))
+    goto out_nounlock; /* netfs_attempt_lookup unlocked dir */
 
-  sprintf(path, "%s/%s", dir->nn->path, name);
+  mutex_lock(&dir->lock);
+
+  if((err = netfs_validate_stat(node, user))
+     || (err = fshelp_checkdirmod(&dir->nn_stat, &node->nn_stat, user)))
+    goto out;
 
   if(! excl && fuse_ops->unlink)
     /* EXCL is not set, therefore we may remove the target, i.e. call
      * unlink on it.  Ignoring return value, as it's mostly not interesting,
      * since the file does not exist in most case
      */
-    (void)fuse_ops->unlink(path);
+    (void) fuse_ops->unlink(node->nn->path);
 
-  err = -fuse_ops->link(file->nn->path, path);
+  err = -fuse_ops->link(file->nn->path, node->nn->path);
 
   /* TODO
    * create a netnode with the may_need_sync flag set!!   */
@@ -693,38 +764,45 @@ error_t netfs_attempt_link (struct iouser *user, struct node *dir,
 
  out:
   mutex_unlock(&dir->lock);
-  free(path);
+  mutex_unlock(&node->lock);
 
+ out_nounlock:
   FUNC_EPILOGUE(err);
 }
 
 
 
-/* Attempt to remove directory named NAME in DIR for USER. */
+/* Attempt to remove directory named NAME in DIR for USER.
+ * directory DIR is locked, and shall stay locked. */
 error_t netfs_attempt_rmdir (struct iouser *user,
 			     struct node *dir, char *name)
 {
   FUNC_PROLOGUE("netfs_attempt_rmdir");
   error_t err = EOPNOTSUPP;
-  char *path = NULL;
+  struct node *node = NULL;
 
   if(! fuse_ops->rmdir)
+    goto out_nounlock;
+
+  err = netfs_attempt_lookup(user, dir, name, &node);
+  mutex_lock(&dir->lock); /* netfs_attempt_lookup unlocked dir */
+
+  if(err)
+    goto out_nounlock; 
+
+  if((err = netfs_validate_stat(node, user))
+     || (err = fshelp_checkdirmod(&dir->nn_stat, &node->nn_stat, user)))
     goto out;
 
-  if(! (path = malloc(strlen(name) + strlen(dir->nn->path) + 2)))
-    {
-      err = ENOMEM;
-      goto out;
-    }
-
-  sprintf(path, "%s/%s", dir->nn->path, name);
-  err = -fuse_ops->unlink(path);
+  err = -fuse_ops->rmdir(node->nn->path);
 
   /* TODO free associated netnode. really? 
    * FIXME, make sure nn->may_need_sync is set */
-  
+
  out:
-  free(path);
+  mutex_unlock(&node->lock);
+
+ out_nounlock:
   FUNC_EPILOGUE(err);
 }
 
@@ -757,6 +835,15 @@ error_t netfs_attempt_mksymlink (struct iouser *cred, struct node *node,
 
   /* symlink function available? if not, fail. */
   if(! fuse_ops->symlink)
+    goto out;
+
+  /* check permissions
+   * XXX, shall we check permissions of the parent directory as well,
+   * since we're going to unlink files?
+   */
+
+  if((err = netfs_validate_stat(node, cred))
+     || (err = fshelp_access(&node->nn_stat, S_IWRITE, cred)))
     goto out;
 
   /* try to remove the existing node (probably an anonymous file) */
@@ -807,6 +894,15 @@ error_t netfs_attempt_rename (struct iouser *user, struct node *fromdir,
     }
 
   mutex_lock(&todir->lock);
+
+  if((err = netfs_validate_stat(fromdir, user))
+     || fshelp_checkdirmod(&fromdir->nn_stat, &fromnode->nn_stat, user))
+    goto out;
+
+  if((err = netfs_validate_stat(todir, user))
+     || fshelp_checkdirmod(&todir->nn_stat, NULL, user))
+    goto out;
+
   sprintf(topath, "%s/%s", todir->nn->path, toname);
 
   if(! excl && fuse_ops->unlink)
@@ -817,7 +913,6 @@ error_t netfs_attempt_rename (struct iouser *user, struct node *fromdir,
     (void) fuse_ops->unlink(topath);
 
   err = -fuse_ops->rename(fromnode->nn->path, topath);
-  mutex_unlock(&fromnode->lock);
 
   if(! err) 
     {
@@ -833,6 +928,7 @@ error_t netfs_attempt_rename (struct iouser *user, struct node *fromdir,
  out:
   free(topath);
   mutex_unlock(&todir->lock);
+  mutex_unlock(&fromnode->lock);
 
  out_nounlock:
   FUNC_EPILOGUE(err);
@@ -847,18 +943,25 @@ error_t netfs_attempt_write (struct iouser *cred, struct node *node,
 			     loff_t offset, size_t *len, void *data)
 {
   FUNC_PROLOGUE_NODE("netfs_attempt_write", node);
+  error_t err = EOPNOTSUPP;
   size_t sz;
 
   if(! fuse_ops->write)
-    FUNC_RETURN(EOPNOTSUPP);
+    goto out;
+
+  if((err = netfs_validate_stat(node, cred))
+     || (err = fshelp_access(&node->nn_stat, S_IWRITE, cred)))
+    goto out;
 
   sz = fuse_ops->write(node->nn->path, data, *len, offset);
 
   if(sz < 0)
-    FUNC_RETURN(-sz);
+    err = -sz;
+  else
+    *len = sz;
 
-  *len = sz;
-  FUNC_EPILOGUE(0);
+ out:
+  FUNC_EPILOGUE(err);
 }
 
 
@@ -881,10 +984,8 @@ netfs_attempt_utimes (struct iouser *cred, struct node *node,
   if(! fuse_ops->utime)
     goto out;
 
-  if(netfs_validate_stat(node, cred))
-    goto out;
-
-  if((err = fshelp_isowner(&node->nn_stat, cred)))
+  if((err = netfs_validate_stat(node, cred))
+     || (err = fshelp_isowner(&node->nn_stat, cred)))
     goto out;
 
   err = -fuse_ops->utime(node->nn->path, &utb);
@@ -913,18 +1014,27 @@ error_t netfs_attempt_read (struct iouser *cred, struct node *node,
 			    loff_t offset, size_t *len, void *data)
 {
   FUNC_PROLOGUE_NODE("netfs_attempt_read", node);
-  size_t sz;
+  error_t err = EOPNOTSUPP;
 
   if(! fuse_ops->read)
-    FUNC_RETURN(EOPNOTSUPP);
+    goto out;
 
-  sz = fuse_ops->read(node->nn->path, data, *len, offset);
+  if((err = netfs_validate_stat(node, cred))
+     || (err = fshelp_access(&node->nn_stat, S_IREAD, cred)))
+    goto out;
+
+  size_t sz = fuse_ops->read(node->nn->path, data, *len, offset);
 
   if(sz < 0)
-    FUNC_RETURN(sz);
+    err = -sz;
+  else
+    {
+      err = 0;
+      *len = sz;
+    }
 
-  *len = sz;
-  FUNC_EPILOGUE(0);
+ out:
+  FUNC_EPILOGUE(err);
 }
 
 
@@ -1038,6 +1148,11 @@ netfs_get_dirents (struct iouser *cred, struct node *dir,
 
   if(! fuse_ops->getdir)
     FUNC_RETURN(EOPNOTSUPP);
+
+  if((err = netfs_validate_stat(dir, cred))
+     || (err = fshelp_access(&dir->nn_stat, S_IREAD, cred))
+     || (err = fshelp_access(&dir->nn_stat, S_IEXEC, cred)))
+    FUNC_RETURN(err);
 
   if(! (handle = malloc(sizeof(struct fuse_dirhandle))))
     FUNC_RETURN(ENOMEM); /* sorry, translator not available ... */

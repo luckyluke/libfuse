@@ -51,8 +51,8 @@ _fuse_main(int argc, char *argv[], const struct fuse_operations *op)
       /* no assigned bootstrap port, i.e. we got called as a
        * common program, not using settrans
        */
-
-      return -EPERM;
+      fprintf(stderr, "%s: must be started as a translator.\n", *argv);
+      return EPERM;
     }
 
   /* we have got a bootstrap port, that is, we were set up

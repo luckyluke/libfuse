@@ -137,7 +137,7 @@ fuse_sync_filesystem(void)
   int i;
   error_t err = 0;
 
-  if(! fuse_ops->fsync)
+  if(! FUSE_OP_HAVE(fsync))
     return err; /* success */
 
   /* make sure, nobody tries to confuse us */
@@ -147,19 +147,25 @@ fuse_sync_filesystem(void)
     {
       struct hash_element *he = &fuse_netnodes[i];
 
-      if(he)
+      if(he->nn)
 	do
-	  if(he->nn->may_need_sync)
-	    {
-	      err = -(fuse_ops ?
-		      fuse_ops->fsync(he->nn->path, 0, &he->nn->info) :
-		      fuse_ops_compat->fsync(he->nn->path, 0));
-	      
-	      if(err)
-		goto out;
-	      else
-		he->nn->may_need_sync = 0;
-	    }
+	  {
+	    if(he->nn->may_need_sync)
+	      {
+		err = -(fuse_ops ?
+			fuse_ops->fsync(he->nn->path, 0, &he->nn->info) :
+			fuse_ops_compat->fsync(he->nn->path, 0));
+		
+		if(err)
+		  goto out;
+		else
+		  he->nn->may_need_sync = 0;
+	      }
+
+	    if(he->nn->node)
+	      DEBUG("netnode-scan", "netnode=%s has attached node\n",
+		    he->nn->path);
+	  }
 	while((he = he->next));
     }
 

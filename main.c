@@ -28,14 +28,18 @@ char *netfs_server_version = VERSION;
 int netfs_maxsymlinks = 12;
 
 /* pointer to the fuse_operations structure of this translator process */
-const struct fuse_operations_compat2 *fuse_ops = NULL;
+int fuse_use_ino = 0;
+const struct fuse_operations *fuse_ops = NULL;
+const struct fuse_operations_compat2 *fuse_ops_compat = NULL;
 
 /* the port where to write out debug messages to, NULL to omit these */
 FILE *debug_port = NULL;
 
-int
-fuse_main_compat2(int argc, char *argv[], const struct fuse_operations *op)
+static int
+_fuse_main(int argc, char *argv[], const struct fuse_operations *op)
 {
+  (void) op; /* handled by wrapper function */
+
   mach_port_t bootstrap, ul_node;
 
   /* print debug messages out to standard error */
@@ -56,9 +60,6 @@ fuse_main_compat2(int argc, char *argv[], const struct fuse_operations *op)
   netfs_init();
   ul_node = netfs_startup(bootstrap, 0);
 
-  /* initialize global fuse4hurd variables ... */
-  fuse_ops = op;
-
   /* create our root node */
   {
     struct netnode *root = fuse_make_netnode(NULL, "/");
@@ -73,4 +74,25 @@ fuse_main_compat2(int argc, char *argv[], const struct fuse_operations *op)
 
   netfs_server_loop();
   return 0;
+}
+
+
+int
+fuse_main_compat2(int argc, char *argv[],
+		  const struct fuse_operations_compat2 *op)
+{
+  /* initialize global fuse4hurd variables ... */
+  fuse_ops_compat = op;
+
+  return _fuse_main(argc, argv, (const struct fuse_operations *) op);
+}
+
+int 
+fuse_main_real(int argc, char *argv[],
+	       const struct fuse_operations *op, size_t op_size)
+{
+  /* initialize global fuse4hurd variables ... */
+  fuse_ops = op;
+
+  return _fuse_main(argc, argv, op);
 }

@@ -95,6 +95,7 @@ fuse_make_netnode(struct netnode *parent, const char *path)
 
   DEBUG("netnodes_lock", "aquiring rwlock_writer_lock for %s.\n", path);
   rwlock_writer_lock(&fuse_netnodes_lock);
+
   nn->inode = fuse_next_inode ++;
 
   /* unable to find hash element, need to generate a new one */
@@ -150,7 +151,9 @@ fuse_sync_filesystem(void)
 	do
 	  if(he->nn->may_need_sync)
 	    {
-	      err = -fuse_ops->fsync(he->nn->path, 0);
+	      err = -(fuse_ops ?
+		      fuse_ops->fsync(he->nn->path, 0, &he->nn->info) :
+		      fuse_ops_compat->fsync(he->nn->path, 0));
 	      
 	      if(err)
 		goto out;

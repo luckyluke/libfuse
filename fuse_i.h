@@ -14,6 +14,14 @@
 #ifndef FUSE_INTERNAL_H
 #define FUSE_INTERNAL_H
 
+#ifdef FUSE_USE_VERSION
+#  include "fuse.h"
+#else
+#  define FUSE_USE_VERSION 22
+#  include "fuse.h"
+#  include "fuse_compat.h"
+#endif
+
 /* write out message to stderr, that some routine is not yet implemented,
  * thus misbehaviour must be accepted. */
 #define NOT_IMPLEMENTED() \
@@ -22,8 +30,14 @@
 	    __LINE__);
 
 /* pointer to the fuse_operations structure of this translator process */
-extern const struct fuse_operations_compat2 *fuse_ops;
+extern int fuse_use_ino;
+extern const struct fuse_operations *fuse_ops;
+extern const struct fuse_operations_compat2 *fuse_ops_compat;
 
+#define FUSE_OP_HAVE(a) ((fuse_ops) ? \
+                          (fuse_ops->a != NULL) : (fuse_ops_compat->a != NULL))
+#define FUSE_OP_CALL(a,b...) ((fuse_ops) ? \
+                               (fuse_ops->a(b)) : (fuse_ops_compat->a(b)))
 
 /*****************************************************************************
  *** netnodes (in memory representation of libfuse's files or directories) ***
@@ -37,6 +51,10 @@ struct netnode {
    * changed - throughout the life of this translator
    */
   ino_t inode;
+
+  /* information about the opened file
+   */
+  struct fuse_file_info info;
 
   /* pointer to our parent's netnode, if any */
   struct netnode *parent;

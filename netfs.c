@@ -61,12 +61,14 @@ netfs_validate_stat (struct node *node, struct iouser *cred)
   FUNC_PROLOGUE_NODE("netfs_validate_stat", node);
   error_t err = EOPNOTSUPP;
 
-  if(fuse_ops->getattr)
-    err = -fuse_ops->getattr(node->nn->path, &node->nn_stat);
+  if(FUSE_OP_HAVE(getattr))
+    err = -FUSE_OP_CALL(getattr, node->nn->path, &node->nn_stat);
 
   if(! err)
     {
-      node->nn_stat.st_ino = node->nn->inode;
+      if(! fuse_use_ino)
+	node->nn_stat.st_ino = node->nn->inode;
+
       node->nn_stat.st_dev = getpid();
       node->nn_stat.st_blksize = 1 << 12; /* there's probably no sane default,
 					   * use 4 kB for the moment */
@@ -88,8 +90,8 @@ error_t netfs_attempt_readlink (struct iouser *user, struct node *node,
      || (err = fshelp_access(&node->nn_stat, S_IREAD, user)))
     goto out;
 
-  if(fuse_ops->readlink)
-    err = -fuse_ops->readlink(node->nn->path, buf, INT_MAX);
+  if(FUSE_OP_HAVE(readlink))
+    err = -FUSE_OP_CALL(readlink, node->nn->path, buf, INT_MAX);
 
  out:
   FUNC_EPILOGUE(err);
@@ -108,7 +110,7 @@ netfs_attempt_create_file (struct iouser *user, struct node *dir,
   error_t err = EOPNOTSUPP;
   char *path = NULL;
 
-  if(! fuse_ops->mknod)
+  if(! FUSE_OP_HAVE(mknod))
     goto out;
 
   if((err = netfs_validate_stat(dir, user))
@@ -126,20 +128,20 @@ netfs_attempt_create_file (struct iouser *user, struct node *dir,
   /* FUSE expects us to use mknod function to create files. This is allowed
    * on Linux, however neither the Hurd nor the POSIX standard consider that
    */
-  err = -fuse_ops->mknod(path, (mode & ALLPERMS) | S_IFREG, 0);
+  err = -FUSE_OP_CALL(mknod, path, (mode & ALLPERMS) | S_IFREG, 0);
 
   /* If available, call chown to make clear which uid/gid to assign to the
    * new file.  Testing with 'fusexmp' I noticed that new files might be
    * created with wrong gids -- root instead of $user in my case  :(
    *
-   * TODO reconsider whether we should setuid/setgid the fuse_ops->mknod
+   * TODO reconsider whether we should setuid/setgid the FUSE_OP_HAVE(mknod)
    * call instead (especially if mknod is not available or returns errors)
    */
-  if(! err && fuse_ops->chown) {
+  if(! err && FUSE_OP_HAVE(chown)) {
     assert(user->uids->ids[0]);
     assert(user->gids->ids[0]);
 
-    (void)fuse_ops->chown(path, user->uids->ids[0], user->gids->ids[0]);
+    (void)FUSE_OP_CALL(chown, path, user->uids->ids[0], user->gids->ids[0]);
   }
 
  out:
@@ -182,7 +184,7 @@ error_t netfs_attempt_chown (struct iouser *cred, struct node *node,
   FUNC_PROLOGUE_NODE("netfs_attempt_chown", node);
   error_t err = EOPNOTSUPP;
 
-  if(! fuse_ops->chown)
+  if(! FUSE_OP_HAVE(chown))
     goto out;
 
   if((err = netfs_validate_stat(node, cred))
@@ -194,7 +196,7 @@ error_t netfs_attempt_chown (struct iouser *cred, struct node *node,
    * owner to e.g. root.
    */
 
-  err = -fuse_ops->chown(node->nn->path, uid, gid);
+  err = -FUSE_OP_CALL(chown, node->nn->path, uid, gid);
   node->nn->may_need_sync = 1;
   
  out:
@@ -214,8 +216,8 @@ netfs_attempt_statfs (struct iouser *cred, struct node *node,
   FUNC_PROLOGUE_NODE("netfs_attempt_statfs", node);
   error_t err = EOPNOTSUPP;
 
-  if(fuse_ops->statfs)
-    err = -fuse_ops->statfs(node->nn->path, st);
+  if(FUSE_OP_HAVE(statfs))
+    err = -FUSE_OP_CALL(statfs, node->nn->path, st);
 
   FUNC_EPILOGUE(err);
 }
@@ -231,7 +233,7 @@ error_t netfs_attempt_mkdir (struct iouser *user, struct node *dir,
   error_t err = EOPNOTSUPP;
   char *path = NULL;
 
-  if(! fuse_ops->mkdir)
+  if(! FUSE_OP_HAVE(mkdir))
     goto out;
 
   if((err = netfs_validate_stat(dir, user))
@@ -246,20 +248,20 @@ error_t netfs_attempt_mkdir (struct iouser *user, struct node *dir,
 
   sprintf(path, "%s/%s", dir->nn->path, name);
 
-  err = -fuse_ops->mkdir(path, mode & ALLPERMS);
+  err = -FUSE_OP_CALL(mkdir, path, mode & ALLPERMS);
 
   /* If available, call chown to make clear which uid/gid to assign to the
    * new file.  Testing with 'fusexmp' I noticed that new files might be
    * created with wrong gids -- root instead of $user in my case  :(
    *
-   * TODO reconsider whether we should setuid/setgid the fuse_ops->mknod
+   * TODO reconsider whether we should setuid/setgid the FUSE_OP_HAVE(mknod)
    * call instead (especially if mknod is not available or returns errors)
    */
-  if(! err && fuse_ops->chown) {
+  if(! err && FUSE_OP_HAVE(chown)) {
     assert(user->uids->ids[0]);
     assert(user->gids->ids[0]);
 
-    (void)fuse_ops->chown(path, user->uids->ids[0], user->gids->ids[0]);
+    (void)FUSE_OP_CALL(chown, path, user->uids->ids[0], user->gids->ids[0]);
   }
 
  out:
@@ -313,12 +315,25 @@ netfs_check_open_permissions (struct iouser *user, struct node *node,
   if (!err && (flags & O_EXEC))
     err = fshelp_access (&node->nn_stat, S_IEXEC, user);
 
-  if (!err && fuse_ops->open)
+  if (!err && FUSE_OP_HAVE(open))
     {
-      err = -fuse_ops->open(node->nn->path, flags);
+      if(fuse_ops)
+	{
+	  /* new fuse api ... */
+	  node->nn->info.flags = flags;
+	  err = -fuse_ops->open(node->nn->path, &node->nn->info);
 
-      if(! err && fuse_ops->release)
-	(void)fuse_ops->release(node->nn->path, flags);
+	  if(! err && fuse_ops->release)
+	    (void) fuse_ops->release(node->nn->path, &node->nn->info);
+	}
+      else
+	{
+	  /* old style api (fuse 2.0) ... */
+	  err = -fuse_ops_compat->open(node->nn->path, flags);
+
+	  if(! err && fuse_ops_compat->release)
+	    (void) fuse_ops_compat->release(node->nn->path, flags);
+	}
     }
 
  out:
@@ -338,14 +353,14 @@ error_t netfs_attempt_chmod (struct iouser *cred, struct node *node,
   FUNC_PROLOGUE_NODE("netfs_attempt_chmod", node);
   error_t err = EOPNOTSUPP;
 
-  if(! fuse_ops->chmod)
+  if(! FUSE_OP_HAVE(chmod))
     goto out;
 
   if((err = netfs_validate_stat(node, cred))
      || (err = fshelp_isowner(&node->nn_stat, cred)))
     goto out;
 
-  err = -fuse_ops->chmod(node->nn->path, mode);
+  err = -FUSE_OP_CALL(chmod, node->nn->path, mode);
   node->nn->may_need_sync = 1;
   
  out:
@@ -364,7 +379,7 @@ error_t netfs_attempt_mkfile (struct iouser *user, struct node *dir,
   char name[20];
   static int num = 0;
 
-  if(fuse_ops->mknod)
+  if(FUSE_OP_HAVE(mknod))
     if(! (err = netfs_validate_stat(dir, user)))
       err = fshelp_checkdirmod(&dir->nn_stat, NULL, user);
 
@@ -437,15 +452,18 @@ netfs_attempt_sync (struct iouser *cred, struct node *node, int wait)
   FUNC_PROLOGUE_NODE("netfs_attempt_sync", node);
   error_t err = EOPNOTSUPP;
 
-  if(! fuse_ops->fsync)
+  if(! FUSE_OP_HAVE(fsync))
     goto out;
 
   if((err = netfs_validate_stat(node, cred))
      || (err = fshelp_access(&node->nn_stat, S_IWRITE, cred)))
     goto out;
 
-  err = -fuse_ops->fsync(node->nn->path, 0);
-    
+  if(fuse_ops)
+    err = -fuse_ops->fsync(node->nn->path, 0, &node->nn->info);
+  else
+    err = -fuse_ops_compat->fsync(node->nn->path, 0);
+        
   if(! err)
     node->nn->may_need_sync = 0; 
 
@@ -465,7 +483,7 @@ error_t netfs_attempt_unlink (struct iouser *user, struct node *dir,
   error_t err = EOPNOTSUPP;
   struct node *node = NULL;
 
-  if(! fuse_ops->unlink)
+  if(! FUSE_OP_HAVE(unlink))
     goto out;
 
   err = netfs_attempt_lookup(user, dir, name, &node);
@@ -483,7 +501,7 @@ error_t netfs_attempt_unlink (struct iouser *user, struct node *dir,
      || (err = fshelp_checkdirmod(&dir->nn_stat, &node->nn_stat, user)))
     goto out;
 
-  err = -fuse_ops->unlink(node->nn->path);
+  err = -FUSE_OP_CALL(unlink, node->nn->path);
 
   /* TODO free associated netnode. really? 
    * FIXME, make sure nn->may_need_sync is set */
@@ -504,14 +522,14 @@ error_t netfs_attempt_set_size (struct iouser *cred, struct node *node,
   FUNC_PROLOGUE_NODE("netfs_attempt_set_size", node);
   error_t err = EOPNOTSUPP;
 
-  if(! fuse_ops->truncate)
+  if(! FUSE_OP_HAVE(truncate))
     goto out;
 
   if((err = netfs_validate_stat(node, cred))
      || (err = fshelp_access(&node->nn_stat, S_IWRITE, cred)))
     goto out;
 
-  err = -fuse_ops->truncate(node->nn->path, size);
+  err = -FUSE_OP_CALL(truncate, node->nn->path, size);
 
  out:
   FUNC_EPILOGUE(err);
@@ -527,13 +545,13 @@ error_t netfs_attempt_mkdev (struct iouser *cred, struct node *node,
   FUNC_PROLOGUE_NODE("netfs_attempt_mkdev", node);
   error_t err = EOPNOTSUPP;
 
-  if(! fuse_ops->mknod)
+  if(! FUSE_OP_HAVE(mknod))
     goto out;
 
   /* we need to unlink the existing node, therefore, if unlink is not
    * available, we cannot turn *node into a device.
    */
-  if(! fuse_ops->unlink)
+  if(! FUSE_OP_HAVE(unlink))
     goto out;
 
   /* check permissions
@@ -548,24 +566,24 @@ error_t netfs_attempt_mkdev (struct iouser *cred, struct node *node,
   /* unlink the already existing node, to be able to create the (new)
    * device file
    */
-  if((err = -fuse_ops->unlink(node->nn->path)))
+  if((err = -FUSE_OP_CALL(unlink, node->nn->path)))
     goto out;
 
-  err = -fuse_ops->mknod(node->nn->path,
+  err = -FUSE_OP_CALL(mknod, node->nn->path,
 			 type & (ALLPERMS | S_IFBLK | S_IFCHR), indexes);
 
   /* If available, call chown to make clear which uid/gid to assign to the
    * new file.  Testing with 'fusexmp' I noticed that new files might be
    * created with wrong gids -- root instead of $user in my case  :(
    *
-   * TODO reconsider whether we should setuid/setgid the fuse_ops->mknod
+   * TODO reconsider whether we should setuid/setgid the FUSE_OP_HAVE(mknod)
    * call instead (especially if mknod is not available or returns errors)
    */
-  if(! err && fuse_ops->chown) {
+  if(! err && FUSE_OP_HAVE(chown)) {
     assert(cred->uids->ids[0]);
     assert(cred->gids->ids[0]);
 
-    (void)fuse_ops->chown(node->nn->path, cred->uids->ids[0],
+    (void)FUSE_OP_CALL(chown, node->nn->path, cred->uids->ids[0],
 			  cred->gids->ids[0]);
   }
 
@@ -604,14 +622,17 @@ netfs_report_access (struct iouser *cred, struct node *node, int *types)
 
 
 /* callback-helper of netfs_attempt_lookup, check whether the name of
- * file (of this callback) is equal to the on we're looking for, in case
+ * file (of this callback) is equal to the one we're looking for, in case
  * set 'found' from fuse_dirh_t handle to TRUE.
+ *
+ * version for new fuse API (since 2.1)
  */
 static int
-fuse_lookup_helper(fuse_dirh_t handle, const char *name, int type)
+fuse_lookup_helper(fuse_dirh_t handle, const char *name, int type, ino_t ino)
 {
   (void) type; /* we want to know whether the file exists at all,
 		* the type is not of any interest */
+  (void) ino;  /* we don't care for inodes here, netfs_validate_stat does it */
 
   if(! strcmp(name, handle->filename))
     {
@@ -622,6 +643,23 @@ fuse_lookup_helper(fuse_dirh_t handle, const char *name, int type)
     }
 
   return 0;
+}
+
+
+/* callback-helper of netfs_attempt_lookup, check whether the name of
+ * file (of this callback) is equal to the one we're looking for, in case
+ * set 'found' from fuse_dirh_t handle to TRUE.
+ *
+ * version for old API
+ */
+static int
+fuse_lookup_helper_compat(fuse_dirh_t handle, const char *name, int type)
+{
+  assert(fuse_use_ino == 0);
+  return fuse_lookup_helper(handle, name, type, 0); /* set ino to 0, it will
+						     * be ignored anyways,
+						     * since fuse_use_ino 
+						     * is off.     */
 }
 
 /* Lookup NAME in DIR for USER; set *NODE to the found name upon return.  If
@@ -664,7 +702,7 @@ error_t netfs_attempt_lookup (struct iouser *user, struct node *dir,
 	err = EAGAIN;
     }
 
-  else if(fuse_ops->getdir)
+  else if(FUSE_OP_HAVE(getdir))
     {
       /* lookup for common file */
       struct netnode *nn;
@@ -679,8 +717,13 @@ error_t netfs_attempt_lookup (struct iouser *user, struct node *dir,
 
       handle->found = 0;
       handle->filename = name;
-	  
-      fuse_ops->getdir(dir->nn->path, handle, fuse_lookup_helper);
+	
+      if(fuse_ops)
+	fuse_ops->getdir(dir->nn->path, handle, fuse_lookup_helper);
+      else
+	fuse_ops_compat->getdir(dir->nn->path, handle,
+				fuse_lookup_helper_compat);
+
       /* we cannot rely on exit status of ->getdir() func, since we
        * return an error from the helper to abort write out
        */
@@ -736,7 +779,7 @@ error_t netfs_attempt_link (struct iouser *user, struct node *dir,
   error_t err = EOPNOTSUPP;
   struct node *node = NULL;
 
-  if(! fuse_ops->link)
+  if(! FUSE_OP_HAVE(link))
     goto out_nounlock;
 
   mutex_lock(&dir->lock);
@@ -751,14 +794,14 @@ error_t netfs_attempt_link (struct iouser *user, struct node *dir,
      || (err = fshelp_checkdirmod(&dir->nn_stat, &node->nn_stat, user)))
     goto out;
 
-  if(! excl && fuse_ops->unlink)
+  if(! excl && FUSE_OP_HAVE(unlink))
     /* EXCL is not set, therefore we may remove the target, i.e. call
      * unlink on it.  Ignoring return value, as it's mostly not interesting,
      * since the file does not exist in most case
      */
-    (void) fuse_ops->unlink(node->nn->path);
+    (void) FUSE_OP_CALL(unlink, node->nn->path);
 
-  err = -fuse_ops->link(file->nn->path, node->nn->path);
+  err = -FUSE_OP_CALL(link, file->nn->path, node->nn->path);
 
   /* TODO
    * create a netnode with the may_need_sync flag set!!   */
@@ -767,15 +810,15 @@ error_t netfs_attempt_link (struct iouser *user, struct node *dir,
    * new file.  Testing with 'fusexmp' I noticed that new files might be
    * created with wrong gids -- root instead of $user in my case  :(
    *
-   * TODO reconsider whether we should setuid/setgid the fuse_ops->mknod
+   * TODO reconsider whether we should setuid/setgid the FUSE_OP_HAVE(mknod)
    * call instead (especially if mknod is not available or returns errors)
    */
-  /* if(! err && fuse_ops->chown)
+  /* if(! err && FUSE_OP_HAVE(chown))
    *   {
    *     assert(user->uids->ids[0]);
    *     assert(user->gids->ids[0]);
    *
-   *     (void)fuse_ops->chown(path, user->uids->ids[0], user->gids->ids[0]);
+   *     (void)FUSE_OP_CALL(chown, path, user->uids->ids[0], user->gids->ids[0]);
    *   }
    */
   /* FIXME
@@ -805,7 +848,7 @@ error_t netfs_attempt_rmdir (struct iouser *user,
   error_t err = EOPNOTSUPP;
   struct node *node = NULL;
 
-  if(! fuse_ops->rmdir)
+  if(! FUSE_OP_HAVE(rmdir))
     goto out_nounlock;
 
   err = netfs_attempt_lookup(user, dir, name, &node);
@@ -819,7 +862,7 @@ error_t netfs_attempt_rmdir (struct iouser *user,
      || (err = fshelp_checkdirmod(&dir->nn_stat, &node->nn_stat, user)))
     goto out;
 
-  err = -fuse_ops->rmdir(node->nn->path);
+  err = -FUSE_OP_CALL(rmdir, node->nn->path);
 
   /* TODO free associated netnode. really? 
    * FIXME, make sure nn->may_need_sync is set */
@@ -859,11 +902,11 @@ error_t netfs_attempt_mksymlink (struct iouser *cred, struct node *node,
   /* we need to unlink the existing node, therefore, if unlink is not
    * available, we cannot create symlinks
    */
-  if(! fuse_ops->unlink)
+  if(! FUSE_OP_HAVE(unlink))
     goto out;
 
   /* symlink function available? if not, fail. */
-  if(! fuse_ops->symlink)
+  if(! FUSE_OP_HAVE(symlink))
     goto out;
 
   /* check permissions
@@ -876,10 +919,10 @@ error_t netfs_attempt_mksymlink (struct iouser *cred, struct node *node,
     goto out;
 
   /* try to remove the existing node (probably an anonymous file) */
-  if((err = -fuse_ops->unlink(node->nn->path)))
+  if((err = -FUSE_OP_CALL(unlink, node->nn->path)))
     goto out;
 
-  err = -fuse_ops->symlink(name, node->nn->path);
+  err = -FUSE_OP_CALL(symlink, name, node->nn->path);
 
   /* we don't have to adjust nodes/netnodes, as these are already existing.
    * netfs_attempt_mkfile did that for us.
@@ -903,7 +946,7 @@ error_t netfs_attempt_rename (struct iouser *user, struct node *fromdir,
   struct node *fromnode;
   char *topath = NULL;
 
-  if(! fuse_ops->rename)
+  if(! FUSE_OP_HAVE(rename))
     goto out_nounlock; 
 
   if(! (topath = malloc(strlen(toname) + strlen(todir->nn->path) + 2)))
@@ -934,14 +977,14 @@ error_t netfs_attempt_rename (struct iouser *user, struct node *fromdir,
 
   sprintf(topath, "%s/%s", todir->nn->path, toname);
 
-  if(! excl && fuse_ops->unlink)
+  if(! excl && FUSE_OP_HAVE(unlink))
     /* EXCL is not set, therefore we may remove the target, i.e. call
      * unlink on it.  Ignoring return value, as it's mostly not interesting,
      * since the file does not exist in most case
      */
-    (void) fuse_ops->unlink(topath);
+    (void) FUSE_OP_CALL(unlink, topath);
 
-  err = -fuse_ops->rename(fromnode->nn->path, topath);
+  err = -FUSE_OP_CALL(rename, fromnode->nn->path, topath);
 
   if(! err) 
     {
@@ -976,15 +1019,19 @@ error_t netfs_attempt_write (struct iouser *cred, struct node *node,
   FUNC_PROLOGUE_NODE("netfs_attempt_write", node);
   error_t err = EOPNOTSUPP;
 
-  if(! fuse_ops->write)
+  if(! FUSE_OP_HAVE(write))
     goto out;
 
   if((err = netfs_validate_stat(node, cred))
      || (err = fshelp_access(&node->nn_stat, S_IWRITE, cred)))
     goto out;
 
-  int sz = fuse_ops->write(node->nn->path, data, *len, offset);
+  node->nn->info.writepage = 0; /* cannot distinct on the Hurd :( */
 
+  int sz = fuse_ops ? 
+    (fuse_ops->write(node->nn->path, data, *len, offset, &node->nn->info)) : 
+    (fuse_ops_compat->write(node->nn->path, data, *len, offset));
+     
   if(sz < 0)
     err = -sz;
   else
@@ -1005,20 +1052,20 @@ netfs_attempt_utimes (struct iouser *cred, struct node *node,
   FUNC_PROLOGUE_NODE("netfs_attempt_utimes", node);
   error_t err = EOPNOTSUPP;
 
-  /* prepare utimebuf for fuse_ops->utime call */
+  /* prepare utimebuf for FUSE_OP_HAVE(utime) call */
   struct utimbuf utb;
   utb.actime = atime ? atime->tv_sec : node->nn_stat.st_atime;
   utb.modtime = mtime ? mtime->tv_sec : node->nn_stat.st_mtime;
 
   /* test whether operation is supported and permission are sufficient */
-  if(! fuse_ops->utime)
+  if(! FUSE_OP_HAVE(utime))
     goto out;
 
   if((err = netfs_validate_stat(node, cred))
      || (err = fshelp_isowner(&node->nn_stat, cred)))
     goto out;
 
-  err = -fuse_ops->utime(node->nn->path, &utb);
+  err = -FUSE_OP_CALL(utime, node->nn->path, &utb);
 
   if (! err)
     {
@@ -1046,14 +1093,16 @@ error_t netfs_attempt_read (struct iouser *cred, struct node *node,
   FUNC_PROLOGUE_NODE("netfs_attempt_read", node);
   error_t err = EOPNOTSUPP;
 
-  if(! fuse_ops->read)
+  if(! FUSE_OP_HAVE(read))
     goto out;
 
   if((err = netfs_validate_stat(node, cred))
      || (err = fshelp_access(&node->nn_stat, S_IREAD, cred)))
     goto out;
 
-  int sz = fuse_ops->read(node->nn->path, data, *len, offset);
+  int sz = fuse_ops ? 
+    (fuse_ops->read(node->nn->path, data, *len, offset, &node->nn->info)) : 
+    (fuse_ops_compat->read(node->nn->path, data, *len, offset));
 
   if(sz < 0)
     err = -sz;
@@ -1113,11 +1162,85 @@ fuse_bump_helper(fuse_dirh_t handle, const char *name, int type)
   return 0;
 }
 
+
+
 /* callback handler used by netfs_get_dirents to write our dirents
- * to the mmaped memmroy
+ * to the mmaped memory
+ *
+ * version for new fuse api
  */
 static int
-fuse_dirent_helper(fuse_dirh_t handle, const char *name, int type)
+fuse_dirent_helper(fuse_dirh_t handle, const char *name, int type, ino_t ino)
+{
+  size_t name_len;
+  size_t dirent_len;
+  struct netnode *nn;
+  size_t inode;
+
+  ino_t fuse_get_inode(const char *name)
+    {
+      struct stat stat;
+
+      assert(fuse_ops);
+      assert(fuse_ops->getattr);
+
+      fuse_ops->getattr(name, &stat);
+      return stat.st_ino;
+    }
+
+  if(handle->first_entry)
+    {
+      /* skip this entry, it's before the first one we got to write out ... */
+      handle->first_entry --;
+      return 0;
+    }
+
+  if(! handle->count)
+    /* already wrote all entries, get outta here */
+    return ENOMEM;
+
+  name_len = strlen(name);
+  dirent_len = DIRENT_LEN(name_len);
+
+  /* look the inode of this element up ... */
+  if(! strcmp(name, "."))
+    inode = fuse_get_inode(handle->parent->path);
+
+  else if(handle->parent->parent && ! strcmp(name, ".."))
+    inode = fuse_get_inode(handle->parent->parent->path);
+
+  else
+    {
+      strcpy(handle->filename, name);
+      nn = fuse_make_netnode(handle->parent, handle->abspath);
+      inode = ino;
+    }
+
+  /* write out struct dirent ... */
+  handle->hdrpos->d_fileno = inode;
+  handle->hdrpos->d_reclen = dirent_len;
+  handle->hdrpos->d_type = type;
+  handle->hdrpos->d_namlen = name_len;
+
+  /* copy file's name ... */
+  memcpy(((void *) handle->hdrpos) + DIRENT_NAME_OFFS, name, name_len + 1);
+
+  /* update hdrpos pointer */
+  handle->hdrpos = ((void *) handle->hdrpos) + dirent_len;
+
+  handle->count --;
+  return 0;
+}
+
+
+
+/* callback handler used by netfs_get_dirents to write our dirents
+ * to the mmaped memory
+ *
+ * version for old api
+ */
+static int
+fuse_dirent_helper_compat(fuse_dirh_t handle, const char *name, int type)
 {
   size_t name_len;
   size_t dirent_len;
@@ -1179,7 +1302,7 @@ netfs_get_dirents (struct iouser *cred, struct node *dir,
   error_t err;
   fuse_dirh_t handle;
 
-  if(! fuse_ops->getdir)
+  if(! FUSE_OP_HAVE(getdir))
     FUNC_RETURN(EOPNOTSUPP);
 
   if((err = netfs_validate_stat(dir, cred))
@@ -1196,7 +1319,11 @@ netfs_get_dirents (struct iouser *cred, struct node *dir,
   handle->max_data_len = max_data_len;
   handle->size = 0;
 
-  err = fuse_ops->getdir(dir->nn->path, handle, fuse_bump_helper);
+  /* using fuse_bump_helper for new and old api, since we just allocate
+   * the memory for real calls, done later.
+   */
+  err = FUSE_OP_CALL(getdir, dir->nn->path, handle, (void *)fuse_bump_helper);
+  
   if(err)
     {
       free(handle);
@@ -1237,7 +1364,12 @@ netfs_get_dirents (struct iouser *cred, struct node *dir,
       handle->first_entry = first_entry;
 
       handle->hdrpos = (struct dirent*) *data;
-      fuse_ops->getdir(dir->nn->path, handle, fuse_dirent_helper);      
+
+      if(fuse_ops)
+	fuse_ops->getdir(dir->nn->path, handle, fuse_dirent_helper);
+      else
+	fuse_ops_compat->getdir(dir->nn->path, handle,
+				fuse_dirent_helper_compat);
     }
 
   /* TODO: fshelp_touch ATIME here */
@@ -1255,10 +1387,10 @@ netfs_node_norefs (struct node *node)
   DEBUG("netnode-lock", "locking netnode, path=%s\n", node->nn->path);
   mutex_lock(&node->nn->lock);
 
-  if(node->nn->anonymous && fuse_ops->unlink)
+  if(node->nn->anonymous && FUSE_OP_HAVE(unlink))
     {
       /* FIXME, need to lock parent directory structure */
-      fuse_ops->unlink(node->nn->path);
+      FUSE_OP_CALL(unlink, node->nn->path);
 
       /* FIXME, free associated netnode somehow. */
     }

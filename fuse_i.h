@@ -22,7 +22,7 @@
 	    __LINE__);
 
 /* pointer to the fuse_operations structure of this translator process */
-extern const struct fuse_operations *fuse_ops;
+extern const struct fuse_operations_compat2 *fuse_ops;
 
 
 /*****************************************************************************

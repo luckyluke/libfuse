@@ -28,13 +28,13 @@ char *netfs_server_version = VERSION;
 int netfs_maxsymlinks = 12;
 
 /* pointer to the fuse_operations structure of this translator process */
-const struct fuse_operations *fuse_ops = NULL;
+const struct fuse_operations_compat2 *fuse_ops = NULL;
 
 /* the port where to write out debug messages to, NULL to omit these */
 FILE *debug_port = NULL;
 
-void
-fuse_main(int argc, char *argv[], const struct fuse_operations *op)
+int
+fuse_main_compat2(int argc, char *argv[], const struct fuse_operations *op)
 {
   mach_port_t bootstrap, ul_node;
 
@@ -48,7 +48,7 @@ fuse_main(int argc, char *argv[], const struct fuse_operations *op)
        * common program, not using settrans
        */
 
-      return;
+      return -EPERM;
     }
 
   /* we have got a bootstrap port, that is, we were set up
@@ -64,11 +64,13 @@ fuse_main(int argc, char *argv[], const struct fuse_operations *op)
     struct netnode *root = fuse_make_netnode(NULL, "/");
     netfs_root_node = fuse_make_node(root);
   }
+
   if(! netfs_root_node)
     {
       perror(PACKAGE ": cannot create rootnode");
-      return;
+      return -EAGAIN;
     }
 
   netfs_server_loop();
+  return 0;
 }

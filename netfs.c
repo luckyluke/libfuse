@@ -193,8 +193,42 @@ error_t netfs_attempt_mkdir (struct iouser *user, struct node *dir,
 			     char *name, mode_t mode)
 {
   FUNC_PROLOGUE("netfs_attempt_mkdir");
-  NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(EROFS);
+  error_t err = EROFS;
+  char *path = NULL;
+
+  if(! fuse_ops->mkdir)
+    goto out;
+
+  if(! (path = malloc(strlen(dir->nn->path) + strlen(name) + 2)))
+    {
+      err = ENOMEM;
+      goto out;
+    }
+
+  sprintf(path, "%s/%s", dir->nn->path, name);
+
+  err = -fuse_ops->mkdir(path, mode & ALLPERMS);
+
+  /* If available, call chown to make clear which uid/gid to assign to the
+   * new file.  Testing with 'fusexmp' I noticed that new files might be
+   * created with wrong gids -- root instead of $user in my case  :(
+   *
+   * TODO reconsider whether we should setuid/setgid the fuse_ops->mknod
+   * call instead (especially if mknod is not available or returns errors)
+   */
+  if(! err && fuse_ops->chown) {
+    assert(user->uids->ids[0]);
+    assert(user->gids->ids[0]);
+
+    (void)fuse_ops->chown(path, user->uids->ids[0], user->gids->ids[0]);
+  }
+
+ out:
+  /* we don't need to make a netnode already, lookup will be called and do
+   * that for us.
+   */
+  free(path);
+  FUNC_EPILOGUE(err);
 }
 
 

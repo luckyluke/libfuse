@@ -1,7 +1,7 @@
 /**********************************************************
  * main.c
  *
- * Copyright 2004, Stefan Siegl <ssiegl@gmx.de>, Germany
+ * Copyright(C) 2004, 2005 by Stefan Siegl <ssiegl@gmx.de>, Germany
  * 
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Publice License,
@@ -92,10 +92,50 @@ netfs_attempt_create_file (struct iouser *user, struct node *dir,
 			   char *name, mode_t mode, struct node **node)
 {
   FUNC_PROLOGUE("netfs_attempt_create_file");
-  *node = 0;
+  error_t err = EROFS;
+  char *path = NULL;
+
+  if(! fuse_ops->mknod)
+    goto out;
+
+  if(! (path = malloc(strlen(dir->nn->path) + strlen(name) + 2)))
+    {
+      err = ENOMEM;
+      goto out;
+    }
+
+  sprintf(path, "%s/%s", dir->nn->path, name);
+
+  /* FUSE expects us to use mknod function to create files. This is allowed
+   * on Linux, however neither the Hurd nor the POSIX standard consider that
+   */
+  err = -fuse_ops->mknod(path, (mode & ALLPERMS) | S_IFREG, 0);
+
+ out:
+  if(err)
+    *node = NULL;
+  else
+    {
+      /* create a new (net-)node for this file */
+      struct netnode *nn = fuse_make_netnode(dir->nn, path);
+
+      if(nn)
+	*node = fuse_make_node(nn);
+      else
+	{
+	  *node = NULL;
+	  err = ENOMEM;
+	}
+    }
+
+  free(path); /* fuse_make_netnode strdup'ed it. */
+
+  if(*node)
+    mutex_lock(&(*node)->lock);
+
   mutex_unlock (&dir->lock);
-  NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(EROFS);
+
+  FUNC_EPILOGUE(err);
 }
 
 
@@ -706,9 +746,11 @@ netfs_node_norefs (struct node *node)
 {
   FUNC_PROLOGUE_NODE("netfs_node_norefs", node);
 
+  DEBUG("netnode-lock", "locking netnode, path=%s\n", node->nn->path);
   mutex_lock(&node->nn->lock);
   node->nn->node = NULL;
   mutex_unlock(&node->nn->lock);
+  DEBUG("netnode-lock", "netnode unlocked.\n"); /* no ref to node->nn av. */
 
   FUNC_EPILOGUE_NORET();
 }

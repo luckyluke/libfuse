@@ -40,7 +40,7 @@ fuse_make_node(struct netnode *nn)
       netfs_nref(node);
       mutex_unlock(&nn->lock);
       DEBUG("netnode-lock", "UNlocking netnode, path=%s\n", nn->path);
-      DEBUG("fuse_make_node", "reusing already existing node, %s.", nn->path);
+      DEBUG("fuse_make_node", "reusing already existing node, %s\n", nn->path);
       return node;
     }
 
@@ -64,6 +64,6 @@ fuse_make_node(struct netnode *nn)
 
   mutex_unlock(&nn->lock);
   DEBUG("netnode-lock", "UNlocking netnode, path=%s\n", nn->path);
-  DEBUG("fuse_make_node", "created a new node for %s.", nn->path);
+  DEBUG("fuse_make_node", "created a new node for %s.\n", nn->path);
   return node;
 }

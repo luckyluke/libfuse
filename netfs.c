@@ -30,6 +30,10 @@
 #include "fuse_i.h"
 #include "fuse.h"
 
+
+
+
+
 /* fuse_dirhandle, passed to ops->getdir to store our information */
 struct fuse_dirhandle {
   /*** stuff needed for attempt_lookup *********************/
@@ -49,6 +53,11 @@ struct fuse_dirhandle {
   char *abspath;
   char *filename;
 };
+
+static int fuse_dirent_helper(fuse_dirh_t handle, const char *name,
+			      int type, ino_t ino);
+static int fuse_dirent_helper_compat(fuse_dirh_t handle, const char *name,
+				     int type);
 
 
 /* Make sure that NP->nn_stat is filled with current information.  CRED
@@ -314,27 +323,6 @@ netfs_check_open_permissions (struct iouser *user, struct node *node,
       
   if (!err && (flags & O_EXEC))
     err = fshelp_access (&node->nn_stat, S_IEXEC, user);
-
-  if (!err && FUSE_OP_HAVE(open))
-    {
-      if(fuse_ops)
-	{
-	  /* new fuse api ... */
-	  node->nn->info.flags = flags;
-	  err = -fuse_ops->open(node->nn->path, &node->nn->info);
-
-	  if(! err && fuse_ops->release)
-	    (void) fuse_ops->release(node->nn->path, &node->nn->info);
-	}
-      else
-	{
-	  /* old style api (fuse 2.0) ... */
-	  err = -fuse_ops_compat->open(node->nn->path, flags);
-
-	  if(! err && fuse_ops_compat->release)
-	    (void) fuse_ops_compat->release(node->nn->path, flags);
-	}
-    }
 
  out:
   FUNC_EPILOGUE(err);
@@ -1177,6 +1165,9 @@ fuse_dirent_helper(fuse_dirh_t handle, const char *name, int type, ino_t ino)
   struct netnode *nn;
   size_t inode;
 
+  if(! fuse_use_ino)
+    return fuse_dirent_helper_compat(handle, name, type);
+
   ino_t fuse_get_inode(const char *name)
     {
       struct stat stat;
@@ -1373,7 +1364,7 @@ netfs_get_dirents (struct iouser *cred, struct node *dir,
     }
 
   /* TODO: fshelp_touch ATIME here */
-  FUNC_EPILOGUE(err);
+  FUNC_EPILOGUE_FMT(err, "%d entries.", *data_entries);
 }
 
 

@@ -1,7 +1,7 @@
 /**********************************************************
  * netnode.c
  *
- * Copyright 2004, Stefan Siegl <ssiegl@gmx.de>, Germany
+ * Copyright(C) 2004, 2005 by Stefan Siegl <ssiegl@gmx.de>, Germany
  * 
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Publice License,
@@ -65,6 +65,7 @@ fuse_make_netnode(struct netnode *parent, const char *path)
   struct netnode *nn;
   int hash_value = fuse_netnode_hash_value(path);
 
+  DEBUG("netnodes_lock", "aquiring rwlock_reader_lock.\n");
   rwlock_reader_lock(&fuse_netnodes_lock);
 
   hash_el = &fuse_netnodes[hash_value];
@@ -74,12 +75,14 @@ fuse_make_netnode(struct netnode *parent, const char *path)
 	{
 	  nn = hash_el->nn;
 	  rwlock_reader_unlock(&fuse_netnodes_lock);
+	  DEBUG("netnodes_lock", "releasing rwlock_reader_lock.\n");
 
 	  return nn;
 	}
     while((hash_el = hash_el->next));
 
   rwlock_reader_unlock(&fuse_netnodes_lock);
+  DEBUG("netnodes_lock", "releasing rwlock_reader_lock.\n");
 
   nn = malloc(sizeof(*nn));
   if(! nn)
@@ -90,6 +93,7 @@ fuse_make_netnode(struct netnode *parent, const char *path)
   nn->node = NULL;
   mutex_init(&nn->lock);
 
+  DEBUG("netnodes_lock", "aquiring rwlock_writer_lock.\n");
   rwlock_writer_lock(&fuse_netnodes_lock);
   nn->inode = fuse_next_inode ++;
 
@@ -103,6 +107,7 @@ fuse_make_netnode(struct netnode *parent, const char *path)
 
       if(! new) {
 	rwlock_writer_unlock(&fuse_netnodes_lock);
+	DEBUG("netnodes_lock", "releasing rwlock_writer_lock.\n");
 	free(nn);
 	return NULL; /* can't help, sorry. */
       }
@@ -117,5 +122,6 @@ fuse_make_netnode(struct netnode *parent, const char *path)
   hash_el->nn = nn;
 
   rwlock_writer_unlock(&fuse_netnodes_lock);
+  DEBUG("netnodes_lock", "releasing rwlock_writer_lock.\n");
   return nn;
 }

@@ -1,7 +1,7 @@
 /**********************************************************
  * node.c
  *
- * Copyright 2004, Stefan Siegl <ssiegl@gmx.de>, Germany
+ * Copyright(C) 2004, 2005 by Stefan Siegl <ssiegl@gmx.de>, Germany
  * 
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Publice License,
@@ -30,6 +30,7 @@ fuse_make_node(struct netnode *nn)
 {
   struct node *node;
 
+  DEBUG("netnode-lock", "locking netnode, path=%s\n", nn->path);
   mutex_lock(&nn->lock);
 
   if((node = nn->node))
@@ -37,12 +38,14 @@ fuse_make_node(struct netnode *nn)
       /* there already is a node, therefore return another reference to it */
       netfs_nref(node);
       mutex_unlock(&nn->lock);
+      DEBUG("netnode-lock", "UNlocking netnode, path=%s\n", nn->path);
       return node;
     }
 
   if(! (node = netfs_make_node(nn)))
     {
       mutex_unlock(&nn->lock);
+      DEBUG("netnode-lock", "UNlocking netnode, path=%s\n", nn->path);
       return NULL; /* doesn't look to good for us :-(   */
     }
 
@@ -58,6 +61,7 @@ fuse_make_node(struct netnode *nn)
   nn->node = node;
 
   mutex_unlock(&nn->lock);
+  DEBUG("netnode-lock", "UNlocking netnode, path=%s\n", nn->path);
 
   return node;
 }

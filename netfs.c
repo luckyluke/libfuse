@@ -456,8 +456,45 @@ error_t netfs_attempt_mkdev (struct iouser *cred, struct node *node,
 			     mode_t type, dev_t indexes)
 {
   FUNC_PROLOGUE_NODE("netfs_attempt_mkdev", node);
-  NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(EROFS);
+  error_t err = EOPNOTSUPP;
+
+  if(! fuse_ops->mknod)
+    goto out;
+
+  /* we need to unlink the existing node, therefore, if unlink is not
+   * available, we cannot turn *node into a device.
+   */
+  if(! fuse_ops->unlink)
+    goto out;
+
+  /* unlink the already existing node, to be able to create the (new)
+   * device file
+   */
+  if((err = -fuse_ops->unlink(node->nn->path)))
+    goto out;
+
+  err = -fuse_ops->mknod(node->nn->path,
+			 type & (ALLPERMS | S_IFBLK | S_IFCHR), indexes);
+
+  /* If available, call chown to make clear which uid/gid to assign to the
+   * new file.  Testing with 'fusexmp' I noticed that new files might be
+   * created with wrong gids -- root instead of $user in my case  :(
+   *
+   * TODO reconsider whether we should setuid/setgid the fuse_ops->mknod
+   * call instead (especially if mknod is not available or returns errors)
+   */
+  if(! err && fuse_ops->chown) {
+    assert(cred->uids->ids[0]);
+    assert(cred->gids->ids[0]);
+
+    (void)fuse_ops->chown(node->nn->path, cred->uids->ids[0],
+			  cred->gids->ids[0]);
+  }
+
+  node->nn->may_need_sync = 1;
+
+ out:
+  FUNC_EPILOGUE(err);
 }
 
 

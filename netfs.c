@@ -90,7 +90,7 @@ netfs_attempt_create_file (struct iouser *user, struct node *dir,
 			   char *name, mode_t mode, struct node **node)
 {
   FUNC_PROLOGUE("netfs_attempt_create_file");
-  error_t err = EROFS;
+  error_t err = EOPNOTSUPP;
   char *path = NULL;
 
   if(! fuse_ops->mknod)
@@ -161,7 +161,7 @@ error_t netfs_attempt_chown (struct iouser *cred, struct node *node,
 			     uid_t uid, uid_t gid)
 {
   FUNC_PROLOGUE_NODE("netfs_attempt_chown", node);
-  error_t err = EROFS;
+  error_t err = EOPNOTSUPP;
 
   if(fuse_ops->chown)
     {
@@ -197,7 +197,7 @@ error_t netfs_attempt_mkdir (struct iouser *user, struct node *dir,
 			     char *name, mode_t mode)
 {
   FUNC_PROLOGUE("netfs_attempt_mkdir");
-  error_t err = EROFS;
+  error_t err = EOPNOTSUPP;
   char *path = NULL;
 
   if(! fuse_ops->mkdir)
@@ -246,7 +246,7 @@ error_t netfs_attempt_chflags (struct iouser *cred, struct node *node,
 {
   FUNC_PROLOGUE_NODE("netfs_attempt_chflags", node);
   NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(EROFS);
+  FUNC_EPILOGUE(EOPNOTSUPP);
 }
 
 
@@ -297,7 +297,7 @@ error_t netfs_attempt_chmod (struct iouser *cred, struct node *node,
 			     mode_t mode)
 {
   FUNC_PROLOGUE_NODE("netfs_attempt_chmod", node);
-  error_t err = EROFS;
+  error_t err = EOPNOTSUPP;
 
   if(fuse_ops->chmod)
     {
@@ -316,7 +316,7 @@ error_t netfs_attempt_mkfile (struct iouser *user, struct node *dir,
 			      mode_t mode, struct node **node)
 {
   FUNC_PROLOGUE("netfs_attempt_mkfile");
-  error_t err = EROFS;
+  error_t err = EOPNOTSUPP;
   char name[20];
   static int num = 0;
 
@@ -409,11 +409,11 @@ error_t netfs_attempt_unlink (struct iouser *user, struct node *dir,
 			      char *name)
 {
   FUNC_PROLOGUE("netfs_attempt_unlink");
-  error_t err = EROFS;
+  error_t err = EOPNOTSUPP;
   char *path = NULL;
 
   if(! fuse_ops->unlink)
-    return err; /* EROFS */
+    return err; /* EOPNOTSUPP */
 
   if(! (path = malloc(strlen(name) + strlen(dir->nn->path) + 2)))
     {
@@ -705,8 +705,27 @@ error_t netfs_attempt_rmdir (struct iouser *user,
 			     struct node *dir, char *name)
 {
   FUNC_PROLOGUE("netfs_attempt_rmdir");
-  NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(EROFS);
+  error_t err = EOPNOTSUPP;
+  char *path = NULL;
+
+  if(! fuse_ops->rmdir)
+    goto out;
+
+  if(! (path = malloc(strlen(name) + strlen(dir->nn->path) + 2)))
+    {
+      err = ENOMEM;
+      goto out;
+    }
+
+  sprintf(path, "%s/%s", dir->nn->path, name);
+  err = -fuse_ops->unlink(path);
+
+  /* TODO free associated netnode. really? 
+   * FIXME, make sure nn->may_need_sync is set */
+  
+ out:
+  free(path);
+  FUNC_EPILOGUE(err);
 }
 
 

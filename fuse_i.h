@@ -164,4 +164,30 @@ extern FILE *debug_port;
 #define FUNC_EPILOGUE(ret) \
   FUNC_EPILOGUE_(ret, (void)0)
 
+
+
+/* malloc debugging */
+#if 1
+static char *_strdup(const char *s, const char *f, int l) {
+void *ptr = strdup(s);
+DEBUG("strdup", "ptr=%8p [%s:%d]\n", ptr, f, l);
+return ptr;
+}
+#undef strdup
+#define strdup(s) _strdup(s, __FILE__, __LINE__)
+
+static void *_malloc(size_t sz, const char *f, int l) {
+void *ptr = malloc(sz);
+DEBUG("malloc", "ptr=%8p [%s:%d]\n", ptr, f, l);
+return ptr;
+}
+#define malloc(s) _malloc(s, __FILE__, __LINE__)
+
+static void _free(void *ptr, const char *f, int l) {
+DEBUG("  free", "ptr=%8p [%s:%d]\n", ptr, f, l);
+free(ptr);
+}
+#define free(s) _free(s, __FILE__, __LINE__)
+#endif
+
 #endif /* FUSE_INTERNAL_H */

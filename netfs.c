@@ -440,8 +440,12 @@ error_t netfs_attempt_set_size (struct iouser *cred, struct node *node,
 				loff_t size)
 {
   FUNC_PROLOGUE_NODE("netfs_attempt_set_size", node);
-  NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(EOPNOTSUPP);
+  error_t err = EOPNOTSUPP;
+
+  if(fuse_ops->truncate)
+    err = -fuse_ops->truncate(node->nn->path, size);
+
+  FUNC_EPILOGUE(err);
 }
 
 

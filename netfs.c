@@ -305,10 +305,45 @@ error_t netfs_attempt_mkfile (struct iouser *user, struct node *dir,
 			      mode_t mode, struct node **node)
 {
   FUNC_PROLOGUE("netfs_attempt_mkfile");
-  *node = 0;
-  mutex_unlock (&dir->lock);
-  NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(EROFS);
+  error_t err = EROFS;
+  char name[20];
+  static int num = 0;
+
+  if(! fuse_ops->mknod)
+    {
+      /* dir has to be unlocked no matter what ... */
+      mutex_unlock (&dir->lock);
+      goto out;
+    }
+
+  /* call netfs_attempt_create_file with O_EXCL and O_CREAT bits set */
+  mode |= O_EXCL | O_CREAT;
+
+  do 
+    {
+      snprintf(name, sizeof(name), ".fuse4hurd-%06d", num ++);
+      err = netfs_attempt_create_file(user, dir, name, mode, node);
+
+      if(err == EEXIST)
+	mutex_lock(&dir->lock); /* netfs_attempt_create_file just unlocked
+				 * it for us, however we need to call it once
+				 * more ...
+				 */
+    } 
+  while(err == EEXIST);
+
+ out:
+  if(err) 
+    *node = 0;
+  else
+    (*node)->nn->anonymous = 1; /* mark netnode of created file as anonymous,
+				 * i.e. mark it as to delete in noref routine
+				 */
+
+  /* mutex_unlock (&dir->lock);
+   * netfs_attempt_create_file already unlocked the node for us.
+   */
+  FUNC_EPILOGUE(err);
 }
 
 
@@ -336,13 +371,33 @@ netfs_attempt_sync (struct iouser *cred, struct node *node, int wait)
 
 
 
-/* Delete NAME in DIR for USER. */
+/* Delete NAME in DIR for USER.
+ * The node DIR is locked, and shall stay locked
+ */
 error_t netfs_attempt_unlink (struct iouser *user, struct node *dir,
 			      char *name)
 {
   FUNC_PROLOGUE("netfs_attempt_unlink");
-  NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(EROFS);
+  error_t err = EROFS;
+  char *path = NULL;
+
+  if(! fuse_ops->unlink)
+    return err; /* EROFS */
+
+  if(! (path = malloc(strlen(name) + strlen(dir->nn->path) + 2)))
+    {
+      err = ENOMEM;
+      goto out;
+    }
+
+  sprintf(path, "%s/%s", dir->nn->path, name);
+  err = -fuse_ops->unlink(path);
+
+  /* TODO free associated netnode. really? */
+ out:
+  free(path);
+
+  FUNC_EPILOGUE(err);
 }
 
 
@@ -510,9 +565,59 @@ out:
 error_t netfs_attempt_link (struct iouser *user, struct node *dir,
 			    struct node *file, char *name, int excl)
 {
-  FUNC_PROLOGUE("netfs_attempt_link");
-  NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(EROFS);
+  FUNC_PROLOGUE_FMT("netfs_attempt_link", "link=%s/%s, to=%s",
+		    dir->nn->path, name, file->nn->path);
+  error_t err = EOPNOTSUPP;
+  char *path = NULL;
+
+  if(! fuse_ops->link)
+    return err; /* EOPNOTSUPP */
+
+  mutex_lock(&dir->lock);
+
+  if(! (path = malloc(strlen(name) + strlen(dir->nn->path) + 2)))
+    {
+      err = ENOMEM;
+      goto out;
+    }
+
+  sprintf(path, "%s/%s", dir->nn->path, name);
+
+  if(! excl && fuse_ops->unlink)
+    /* EXCL is not set, therefore we may remove the target, i.e. call
+     * unlink on it.  Ignoring return value, as it's mostly not interesting,
+     * since the file does not exist in most case
+     */
+    (void)fuse_ops->unlink(path);
+
+  err = -fuse_ops->link(file->nn->path, path);
+
+  /* If available, call chown to make clear which uid/gid to assign to the
+   * new file.  Testing with 'fusexmp' I noticed that new files might be
+   * created with wrong gids -- root instead of $user in my case  :(
+   *
+   * TODO reconsider whether we should setuid/setgid the fuse_ops->mknod
+   * call instead (especially if mknod is not available or returns errors)
+   */
+  /* if(! err && fuse_ops->chown)
+   *   {
+   *     assert(user->uids->ids[0]);
+   *     assert(user->gids->ids[0]);
+   *
+   *     (void)fuse_ops->chown(path, user->uids->ids[0], user->gids->ids[0]);
+   *   }
+   */
+  /* FIXME
+   * This is most probably not a good idea to do here, as it would change
+   * the user and group-id of the other (linked) files as well, sharing the
+   * same inode.
+   */
+
+ out:
+  mutex_unlock(&dir->lock);
+  free(path);
+
+  FUNC_EPILOGUE(err);
 }
 
 
@@ -545,8 +650,30 @@ error_t netfs_attempt_mksymlink (struct iouser *cred, struct node *node,
 				 char *name)
 {
   FUNC_PROLOGUE_NODE("netfs_attempt_mksymlink", node);
-  NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(EROFS);
+  error_t err = EOPNOTSUPP;
+
+  /* we need to unlink the existing node, therefore, if unlink is not
+   * available, we cannot create symlinks
+   */
+  if(! fuse_ops->unlink)
+    goto out;
+
+  /* symlink function available? if not, fail. */
+  if(! fuse_ops->symlink)
+    goto out;
+
+  /* try to remove the existing node (probably an anonymous file) */
+  if((err = -fuse_ops->unlink(node->nn->path)))
+    goto out;
+
+  err = -fuse_ops->symlink(name, node->nn->path);
+
+  /* we don't have to adjust nodes/netnodes, as these are already existing.
+   * netfs_attempt_mkfile did that for us.
+   */
+
+ out:
+  FUNC_EPILOGUE(err);
 }
 
 
@@ -814,7 +941,17 @@ netfs_node_norefs (struct node *node)
 
   DEBUG("netnode-lock", "locking netnode, path=%s\n", node->nn->path);
   mutex_lock(&node->nn->lock);
+
+  if(node->nn->anonymous && fuse_ops->unlink)
+    {
+      /* FIXME, need to lock parent directory structure */
+      fuse_ops->unlink(node->nn->path);
+
+      /* FIXME, free associated netnode somehow. */
+    }
+
   node->nn->node = NULL;
+
   mutex_unlock(&node->nn->lock);
   DEBUG("netnode-lock", "netnode unlocked.\n"); /* no ref to node->nn av. */
 

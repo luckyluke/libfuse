@@ -15,6 +15,7 @@
 #  include <config.h>
 #endif
 
+#include <unistd.h>
 #include <stdio.h>
 #include <error.h>
 #include <hurd/netfs.h>
@@ -41,9 +42,47 @@ _fuse_main(int argc, char *argv[], const struct fuse_operations *op)
   (void) op; /* handled by wrapper function */
 
   mach_port_t bootstrap, ul_node;
+  const char *translat_path = argv[0];
 
-  /* print debug messages out to standard error */
-  debug_port = stderr;
+  /* parse command line arguments */
+  int opt;
+  FILE *opt_help = NULL;
+
+  while((opt = getopt(argc, argv, "d::h")) >= 0)
+    switch(opt)
+      {
+      case 'd':
+	if(optarg)
+	  debug_port = fopen(optarg, "w");
+	if(! debug_port)
+	  debug_port = stderr;
+
+	setvbuf(debug_port, NULL, _IONBF, 0);
+	fprintf(debug_port, "translator %s starting up.\n", translat_path);
+	break;
+
+      case 'h':
+	opt_help = stdout;
+	break;
+
+      case '?':
+      default:
+	opt_help = stderr;
+	break;
+      }
+
+  if(opt_help)
+    {
+      fprintf(opt_help,
+	      "\nusage: %s [options]\n\n"
+	      "Options:\n"
+	      "    -d[FILENAME]        enable debug output (default=stderr)\n"
+	      "    -h                  print help\n"
+	      "\n", translat_path);
+
+      return opt_help == stdout ? 0 : 1;
+    }
+	      
 
   task_get_bootstrap_port(mach_task_self(), &bootstrap);
   if(bootstrap == MACH_PORT_NULL)
@@ -51,7 +90,7 @@ _fuse_main(int argc, char *argv[], const struct fuse_operations *op)
       /* no assigned bootstrap port, i.e. we got called as a
        * common program, not using settrans
        */
-      fprintf(stderr, "%s: must be started as a translator.\n", *argv);
+      fprintf(stderr, "%s: must be started as a translator.\n", translat_path);
       return EPERM;
     }
 

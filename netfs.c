@@ -56,12 +56,13 @@ struct fuse_dirhandle {
 error_t
 netfs_validate_stat (struct node *node, struct iouser *cred)
 {
+  FUNC_PROLOGUE_NODE("netfs_validate_stat", node);
   error_t err = EOPNOTSUPP;
 
   if(fuse_ops->getattr)
     err = fuse_ops->getattr(node->nn->path, &node->nn_stat);
 
-  return err;
+  FUNC_EPILOGUE(err);
 }
 
 
@@ -70,14 +71,15 @@ netfs_validate_stat (struct node *node, struct iouser *cred)
 error_t netfs_attempt_readlink (struct iouser *user, struct node *node,
 				char *buf)
 {
+  FUNC_PROLOGUE_NODE("netfs_attempt_readlink", node);
   error_t err;
 
   if(! fuse_ops->readlink)
-    return EOPNOTSUPP;
+    FUNC_RETURN(EOPNOTSUPP);
 
   err = -fuse_ops->readlink(node->nn->path, buf, INT_MAX);
-  fprintf(stderr, "readlink mapping: %s -> %s\n", node->nn->path, buf);
-  return err;
+
+  FUNC_EPILOGUE(err);
 }
 
 
@@ -89,10 +91,11 @@ error_t
 netfs_attempt_create_file (struct iouser *user, struct node *dir,
 			   char *name, mode_t mode, struct node **node)
 {
+  FUNC_PROLOGUE("netfs_attempt_create_file");
   *node = 0;
   mutex_unlock (&dir->lock);
   NOT_IMPLEMENTED();
-  return EROFS;
+  FUNC_EPILOGUE(EROFS);
 }
 
 
@@ -102,8 +105,9 @@ netfs_attempt_create_file (struct iouser *user, struct node *dir,
 error_t netfs_attempt_chown (struct iouser *cred, struct node *node,
 			     uid_t uid, uid_t gid)
 {
+  FUNC_PROLOGUE_NODE("netfs_attempt_chown", node);
   NOT_IMPLEMENTED();
-  return EROFS;
+  FUNC_EPILOGUE(EROFS);
 }
 
 
@@ -114,8 +118,9 @@ error_t
 netfs_attempt_statfs (struct iouser *cred, struct node *node,
 		      fsys_statfsbuf_t *st)
 {
+  FUNC_PROLOGUE_NODE("netfs_attempt_statfs", node);
   NOT_IMPLEMENTED();
-  return EOPNOTSUPP;
+  FUNC_EPILOGUE(EOPNOTSUPP);
 }
 
 
@@ -125,8 +130,9 @@ netfs_attempt_statfs (struct iouser *cred, struct node *node,
 error_t netfs_attempt_mkdir (struct iouser *user, struct node *dir,
 			     char *name, mode_t mode)
 {
+  FUNC_PROLOGUE("netfs_attempt_mkdir");
   NOT_IMPLEMENTED();
-  return EROFS;
+  FUNC_EPILOGUE(EROFS);
 }
 
 
@@ -136,8 +142,9 @@ error_t netfs_attempt_mkdir (struct iouser *user, struct node *dir,
 error_t netfs_attempt_chflags (struct iouser *cred, struct node *node,
 			       int flags)
 {
+  FUNC_PROLOGUE_NODE("netfs_attempt_chflags", node);
   NOT_IMPLEMENTED();
-  return EROFS;
+  FUNC_EPILOGUE(EROFS);
 }
 
 
@@ -149,6 +156,7 @@ error_t
 netfs_check_open_permissions (struct iouser *user, struct node *node,
 			      int flags, int newnode)
 {
+  FUNC_PROLOGUE_NODE("netfs_check_open_permissions", node);
   error_t err = 0;
 
   /* it's a directory, we need to check permissions on our own ... */
@@ -165,7 +173,7 @@ netfs_check_open_permissions (struct iouser *user, struct node *node,
    * call fuse_ops->open() to check for permission
    */
 
-  return err;
+  FUNC_EPILOGUE(err);
 }
 
 
@@ -178,8 +186,9 @@ netfs_check_open_permissions (struct iouser *user, struct node *node,
 error_t netfs_attempt_chmod (struct iouser *cred, struct node *node,
 			     mode_t mode)
 {
+  FUNC_PROLOGUE_NODE("netfs_attempt_chmod", node);
   NOT_IMPLEMENTED();
-  return EROFS;
+  FUNC_EPILOGUE(EROFS);
 }
 
 
@@ -189,10 +198,11 @@ error_t netfs_attempt_chmod (struct iouser *cred, struct node *node,
 error_t netfs_attempt_mkfile (struct iouser *user, struct node *dir,
 			      mode_t mode, struct node **node)
 {
+  FUNC_PROLOGUE("netfs_attempt_mkfile");
   *node = 0;
   mutex_unlock (&dir->lock);
   NOT_IMPLEMENTED();
-  return EROFS;
+  FUNC_EPILOGUE(EROFS);
 }
 
 
@@ -201,8 +211,9 @@ error_t netfs_attempt_mkfile (struct iouser *user, struct node *dir,
    only after sync is completely finished.  */
 error_t netfs_attempt_syncfs (struct iouser *cred, int wait)
 {
+  FUNC_PROLOGUE("netfs_attempt_syncfs");
   NOT_IMPLEMENTED();
-  return 0;
+  FUNC_EPILOGUE(0);
 }
 
 
@@ -212,8 +223,9 @@ error_t netfs_attempt_syncfs (struct iouser *cred, int wait)
 error_t
 netfs_attempt_sync (struct iouser *cred, struct node *node, int wait)
 {
+  FUNC_PROLOGUE_NODE("netfs_attempt_sync", node);
   NOT_IMPLEMENTED();
-  return 0;
+  FUNC_EPILOGUE(0);
 }
 
 
@@ -222,8 +234,9 @@ netfs_attempt_sync (struct iouser *cred, struct node *node, int wait)
 error_t netfs_attempt_unlink (struct iouser *user, struct node *dir,
 			      char *name)
 {
+  FUNC_PROLOGUE("netfs_attempt_unlink");
   NOT_IMPLEMENTED();
-  return EROFS;
+  FUNC_EPILOGUE(EROFS);
 }
 
 
@@ -233,8 +246,9 @@ error_t netfs_attempt_unlink (struct iouser *user, struct node *dir,
 error_t netfs_attempt_set_size (struct iouser *cred, struct node *node,
 				loff_t size)
 {
+  FUNC_PROLOGUE_NODE("netfs_attempt_set_size", node);
   NOT_IMPLEMENTED();
-  return EOPNOTSUPP;
+  FUNC_EPILOGUE(EOPNOTSUPP);
 }
 
 
@@ -244,8 +258,9 @@ error_t netfs_attempt_set_size (struct iouser *cred, struct node *node,
 error_t netfs_attempt_mkdev (struct iouser *cred, struct node *node,
 			     mode_t type, dev_t indexes)
 {
+  FUNC_PROLOGUE_NODE("netfs_attempt_mkdev", node);
   NOT_IMPLEMENTED();
-  return EROFS;
+  FUNC_EPILOGUE(EROFS);
 }
 
 
@@ -255,6 +270,7 @@ error_t netfs_attempt_mkdev (struct iouser *cred, struct node *node,
 error_t
 netfs_report_access (struct iouser *cred, struct node *node, int *types)
 {
+  FUNC_PROLOGUE_NODE("netfs_report_access", node);
   *types = 0;
 
   if (fshelp_access (&node->nn_stat, S_IREAD, cred) == 0)
@@ -266,7 +282,7 @@ netfs_report_access (struct iouser *cred, struct node *node, int *types)
   if (fshelp_access (&node->nn_stat, S_IEXEC, cred) == 0)
     *types |= O_EXEC;
   
-  return 0;
+  FUNC_EPILOGUE(0);
 }
 
 
@@ -295,10 +311,10 @@ fuse_lookup_helper(fuse_dirh_t handle, const char *name, int type)
 error_t netfs_attempt_lookup (struct iouser *user, struct node *dir,
 			      char *name, struct node **node)
 {
-  error_t err = ENOENT;
+  FUNC_PROLOGUE_FMT("netfs_attempt_lookup", "name=%s, dir=%s",
+		    name, dir->nn->path);
 
-  fprintf(stderr, "netfs_attempt_lookup for %s in %s\n",
-	  name, dir->nn->path);
+  error_t err = ENOENT;
 
   if(! strcmp(name, "."))
     {
@@ -344,7 +360,6 @@ error_t netfs_attempt_lookup (struct iouser *user, struct node *dir,
 
       if(! handle->found)
 	{
-	  fprintf(stderr, ".. unable to look fusenode up ...\n");
 	  err = ENOENT;
 	  goto out;
 	}
@@ -378,9 +393,7 @@ out:
   else
     mutex_lock(&(*node)->lock);
 
-  fprintf(stderr, "lookup routine returning: %d", err);
-
-  return err;
+  FUNC_EPILOGUE(err);
 }
 
 
@@ -391,8 +404,9 @@ out:
 error_t netfs_attempt_link (struct iouser *user, struct node *dir,
 			    struct node *file, char *name, int excl)
 {
+  FUNC_PROLOGUE("netfs_attempt_link");
   NOT_IMPLEMENTED();
-  return EROFS;
+  FUNC_EPILOGUE(EROFS);
 }
 
 
@@ -401,8 +415,9 @@ error_t netfs_attempt_link (struct iouser *user, struct node *dir,
 error_t netfs_attempt_rmdir (struct iouser *user,
 			     struct node *dir, char *name)
 {
+  FUNC_PROLOGUE("netfs_attempt_rmdir");
   NOT_IMPLEMENTED();
-  return EROFS;
+  FUNC_EPILOGUE(EROFS);
 }
 
 
@@ -412,8 +427,9 @@ error_t netfs_attempt_rmdir (struct iouser *user,
 error_t netfs_attempt_chauthor (struct iouser *cred, struct node *node,
 				uid_t author)
 {
+  FUNC_PROLOGUE_NODE("netfs_attempt_chauthor", node);
   NOT_IMPLEMENTED();
-  return EROFS;
+  FUNC_EPILOGUE(EROFS);
 }
 
 
@@ -422,8 +438,9 @@ error_t netfs_attempt_chauthor (struct iouser *cred, struct node *node,
 error_t netfs_attempt_mksymlink (struct iouser *cred, struct node *node,
 				 char *name)
 {
+  FUNC_PROLOGUE_NODE("netfs_attempt_mksymlink", node);
   NOT_IMPLEMENTED();
-  return EROFS;
+  FUNC_EPILOGUE(EROFS);
 }
 
 
@@ -433,8 +450,9 @@ error_t netfs_attempt_rename (struct iouser *user, struct node *fromdir,
 			      char *fromname, struct node *todir,
 			      char *toname, int excl)
 {
+  FUNC_PROLOGUE("netfs_attempt_rename");
   NOT_IMPLEMENTED();
-  return EROFS;
+  FUNC_EPILOGUE(EROFS);
 }
 
 
@@ -445,8 +463,9 @@ error_t netfs_attempt_rename (struct iouser *user, struct node *fromdir,
 error_t netfs_attempt_write (struct iouser *cred, struct node *node,
 			     loff_t offset, size_t *len, void *data)
 {
+  FUNC_PROLOGUE_NODE("netfs_attempt_write", node);
   NOT_IMPLEMENTED();
-  return EROFS;
+  FUNC_EPILOGUE(EROFS);
 }
 
 
@@ -457,6 +476,7 @@ error_t
 netfs_attempt_utimes (struct iouser *cred, struct node *node,
 		      struct timespec *atime, struct timespec *mtime)
 {
+  FUNC_PROLOGUE_NODE("netfs_attempt_utimes", node);
   error_t err = fshelp_isowner (&node->nn_stat, cred);
   int flags = TOUCH_CTIME;
 
@@ -483,7 +503,7 @@ netfs_attempt_utimes (struct iouser *cred, struct node *node,
       /* fshelp_touch (&node->nn_stat, flags, cvsfs_maptime); */
     }
 
-  return err;
+  FUNC_EPILOGUE(err);
 }
 
 
@@ -494,18 +514,19 @@ netfs_attempt_utimes (struct iouser *cred, struct node *node,
 error_t netfs_attempt_read (struct iouser *cred, struct node *node,
 			    loff_t offset, size_t *len, void *data)
 {
+  FUNC_PROLOGUE_NODE("netfs_attempt_read", node);
   size_t sz;
 
   if(! fuse_ops->read)
-    return EOPNOTSUPP;
+    FUNC_RETURN(EOPNOTSUPP);
 
   sz = fuse_ops->read(node->nn->path, data, *len, offset);
 
   if(sz < 0)
-    return sz;
+    FUNC_RETURN(sz);
 
   *len = sz;
-  return 0;
+  FUNC_EPILOGUE(0);
 }
 
 
@@ -613,16 +634,15 @@ netfs_get_dirents (struct iouser *cred, struct node *dir,
 		   mach_msg_type_number_t *data_len,
 		   vm_size_t max_data_len, int *data_entries)
 {
+  FUNC_PROLOGUE_NODE("netfs_get_dirents", dir);
   error_t err;
   fuse_dirh_t handle;
 
   if(! fuse_ops->getdir)
-    return EOPNOTSUPP;
+    FUNC_RETURN(EOPNOTSUPP);
 
   if(! (handle = malloc(sizeof(struct fuse_dirhandle))))
-    return ENOMEM; /* sorry, translator not available ... */
-
-  fprintf(stderr, "entering netfs_get_dirents\n");
+    FUNC_RETURN(ENOMEM); /* sorry, translator not available ... */
 
   handle->first_entry = first_entry;
   handle->num_entries = num_entries;
@@ -634,7 +654,7 @@ netfs_get_dirents (struct iouser *cred, struct node *dir,
   if(err)
     {
       free(handle);
-      return err; 
+      FUNC_RETURN(err);
     }
 
   /* allocate handle->abspath */
@@ -644,7 +664,7 @@ netfs_get_dirents (struct iouser *cred, struct node *dir,
     if(! (handle->abspath = malloc(path_len + handle->max_name_len + 2)))
       {
 	free(handle);
-	return ENOMEM;
+	FUNC_RETURN(ENOMEM);
       }
 
     memcpy(handle->abspath, dir->nn->path, path_len);
@@ -675,8 +695,7 @@ netfs_get_dirents (struct iouser *cred, struct node *dir,
     }
 
   /* TODO: fshelp_touch ATIME here */
-  fprintf(stderr, "get_dirents done.\n");
-  return err;
+  FUNC_EPILOGUE(err);
 }
 
 
@@ -685,7 +704,11 @@ netfs_get_dirents (struct iouser *cred, struct node *dir,
 void
 netfs_node_norefs (struct node *node)
 {
+  FUNC_PROLOGUE_NODE("netfs_node_norefs", node);
+
   mutex_lock(&node->nn->lock);
   node->nn->node = NULL;
   mutex_unlock(&node->nn->lock);
+
+  FUNC_EPILOGUE_NORET();
 }

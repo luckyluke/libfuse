@@ -72,12 +72,10 @@ error_t netfs_attempt_readlink (struct iouser *user, struct node *node,
 				char *buf)
 {
   FUNC_PROLOGUE_NODE("netfs_attempt_readlink", node);
-  error_t err;
+  error_t err = EOPNOTSUPP;
 
-  if(! fuse_ops->readlink)
-    FUNC_RETURN(EOPNOTSUPP);
-
-  err = -fuse_ops->readlink(node->nn->path, buf, INT_MAX);
+  if(fuse_ops->readlink)
+    err = -fuse_ops->readlink(node->nn->path, buf, INT_MAX);
 
   FUNC_EPILOGUE(err);
 }

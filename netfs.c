@@ -783,8 +783,59 @@ error_t netfs_attempt_rename (struct iouser *user, struct node *fromdir,
 			      char *toname, int excl)
 {
   FUNC_PROLOGUE("netfs_attempt_rename");
-  NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(EROFS);
+  error_t err = EOPNOTSUPP;
+  struct node *fromnode;
+  char *topath = NULL;
+
+  if(! fuse_ops->rename)
+    goto out_nounlock; 
+
+  if(! (topath = malloc(strlen(toname) + strlen(todir->nn->path) + 2)))
+    {
+      err = ENOMEM;
+      goto out_nounlock;
+    }
+
+  mutex_lock(&fromdir->lock);
+
+  if(netfs_attempt_lookup(user, fromdir, fromname, &fromnode))
+    {
+      err = ENOENT;
+      goto out_nounlock; /* netfs_attempt_lookup unlocked fromdir and locked
+			  * fromnode for us. 
+			  */
+    }
+
+  mutex_lock(&todir->lock);
+  sprintf(topath, "%s/%s", todir->nn->path, toname);
+
+  if(! excl && fuse_ops->unlink)
+    /* EXCL is not set, therefore we may remove the target, i.e. call
+     * unlink on it.  Ignoring return value, as it's mostly not interesting,
+     * since the file does not exist in most case
+     */
+    (void) fuse_ops->unlink(topath);
+
+  err = -fuse_ops->rename(fromnode->nn->path, topath);
+  mutex_unlock(&fromnode->lock);
+
+  if(! err) 
+    {
+      struct netnode *nn;
+
+      if(! (nn = fuse_make_netnode(todir->nn, topath)))
+	goto out;
+
+      nn->may_need_sync = 1;
+      /* FIXME mark fromnode to destroy it's associated netnode */
+    }
+
+ out:
+  free(topath);
+  mutex_unlock(&todir->lock);
+
+ out_nounlock:
+  FUNC_EPILOGUE(err);
 }
 
 

@@ -125,3 +125,42 @@ fuse_make_netnode(struct netnode *parent, const char *path)
   DEBUG("netnodes_lock", "releasing rwlock_writer_lock.\n");
   return nn;
 }
+
+
+/* scan the whole netnode hash and call fuse_ops->fsync on every node,
+ * that may be out of sync
+ */
+error_t
+fuse_sync_filesystem(void)
+{
+  int i;
+  error_t err = 0;
+
+  if(! fuse_ops->fsync)
+    return err; /* success */
+
+  /* make sure, nobody tries to confuse us */
+  rwlock_writer_lock(&fuse_netnodes_lock);
+
+  for(i = 0; i < HASH_BUCKETS; i ++)
+    {
+      struct hash_element *he = &fuse_netnodes[i];
+
+      if(he)
+	do
+	  if(he->nn->may_need_sync)
+	    {
+	      err = -fuse_ops->fsync(he->nn->path, 0);
+	      
+	      if(err)
+		goto out;
+	      else
+		he->nn->may_need_sync = 0;
+	    }
+	while((he = he->next));
+    }
+
+ out:
+  rwlock_writer_unlock(&fuse_netnodes_lock);
+  return err;
+}

@@ -53,12 +53,22 @@ struct netnode {
    * after the last node associated to it, was removed.
    */
   unsigned anonymous :1;
+
+  /* whether the netnode was touched since reading it from disk, 
+   * i.e. the was a write access that may not be synced to disk
+   */
+  unsigned may_need_sync :1;
 };
 
 /* make a new netnode for a specific path, with specified parent
  * parent == NULL means root node, i.e. "/" ...
  */
 struct netnode *fuse_make_netnode(struct netnode *parent, const char *path);
+
+/* scan the whole netnode hash and call fuse_ops->fsync on every node,
+ * that may be out of sync
+ */
+error_t fuse_sync_filesystem(void);
 
 
 

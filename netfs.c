@@ -132,7 +132,10 @@ netfs_attempt_create_file (struct iouser *user, struct node *dir,
       struct netnode *nn = fuse_make_netnode(dir->nn, path);
 
       if(nn)
-	*node = fuse_make_node(nn);
+	{
+	  nn->may_need_sync = 1;
+	  *node = fuse_make_node(nn);
+	}
       else
 	{
 	  *node = NULL;
@@ -161,7 +164,10 @@ error_t netfs_attempt_chown (struct iouser *cred, struct node *node,
   error_t err = EROFS;
 
   if(fuse_ops->chown)
-    err = -fuse_ops->chown(node->nn->path, uid, gid);
+    {
+      err = -fuse_ops->chown(node->nn->path, uid, gid);
+      node->nn->may_need_sync = 1;
+    }
 
   FUNC_EPILOGUE(err);
 }
@@ -224,6 +230,8 @@ error_t netfs_attempt_mkdir (struct iouser *user, struct node *dir,
  out:
   /* we don't need to make a netnode already, lookup will be called and do
    * that for us.
+   *
+   * FIXME we must make sure, that the netnode will have may_need_sync is set
    */
   free(path);
   FUNC_EPILOGUE(err);
@@ -292,7 +300,10 @@ error_t netfs_attempt_chmod (struct iouser *cred, struct node *node,
   error_t err = EROFS;
 
   if(fuse_ops->chmod)
-    err = -fuse_ops->chmod(node->nn->path, mode);
+    {
+      err = -fuse_ops->chmod(node->nn->path, mode);
+      node->nn->may_need_sync = 1;
+    }
 
   FUNC_EPILOGUE(err);
 }
@@ -340,6 +351,10 @@ error_t netfs_attempt_mkfile (struct iouser *user, struct node *dir,
 				 * i.e. mark it as to delete in noref routine
 				 */
 
+  /* we don't have to mark the netnode as may_need_sync, as
+   * netfs_attempt_create_file has already done that for us
+   */
+
   /* mutex_unlock (&dir->lock);
    * netfs_attempt_create_file already unlocked the node for us.
    */
@@ -352,9 +367,14 @@ error_t netfs_attempt_mkfile (struct iouser *user, struct node *dir,
    only after sync is completely finished.  */
 error_t netfs_attempt_syncfs (struct iouser *cred, int wait)
 {
+  (void) cred;   /* cannot use anything but translator's rights,
+		  * FIXME, maybe setuid/setgid? */
+  (void) wait;   /* there's no such flag in libfuse */
+
   FUNC_PROLOGUE("netfs_attempt_syncfs");
-  NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(0);
+  error_t err = fuse_sync_filesystem();
+
+  FUNC_EPILOGUE(err);
 }
 
 
@@ -364,11 +384,18 @@ error_t netfs_attempt_syncfs (struct iouser *cred, int wait)
 error_t
 netfs_attempt_sync (struct iouser *cred, struct node *node, int wait)
 {
+  (void) cred;   /* cannot use anything but translator's rights,
+		  * FIXME, maybe setuid/setgid? */
+  (void) wait;   /* there's no such flag in libfuse */
+
   FUNC_PROLOGUE_NODE("netfs_attempt_sync", node);
   error_t err = EOPNOTSUPP;
 
   if(fuse_ops->fsync)
     err = -fuse_ops->fsync(node->nn->path, 0);
+    
+  if(! err)
+    node->nn->may_need_sync = 0; 
 
   FUNC_EPILOGUE(err);
 }
@@ -397,7 +424,8 @@ error_t netfs_attempt_unlink (struct iouser *user, struct node *dir,
   sprintf(path, "%s/%s", dir->nn->path, name);
   err = -fuse_ops->unlink(path);
 
-  /* TODO free associated netnode. really? */
+  /* TODO free associated netnode. really? 
+   * FIXME, make sure nn->may_need_sync is set */
  out:
   free(path);
 
@@ -596,6 +624,9 @@ error_t netfs_attempt_link (struct iouser *user, struct node *dir,
 
   err = -fuse_ops->link(file->nn->path, path);
 
+  /* TODO
+   * create a netnode with the may_need_sync flag set!!   */
+
   /* If available, call chown to make clear which uid/gid to assign to the
    * new file.  Testing with 'fusexmp' I noticed that new files might be
    * created with wrong gids -- root instead of $user in my case  :(
@@ -675,6 +706,8 @@ error_t netfs_attempt_mksymlink (struct iouser *cred, struct node *node,
   /* we don't have to adjust nodes/netnodes, as these are already existing.
    * netfs_attempt_mkfile did that for us.
    */
+  if(! err)
+    node->nn->may_need_sync = 1;
 
  out:
   FUNC_EPILOGUE(err);
@@ -736,7 +769,8 @@ netfs_attempt_utimes (struct iouser *cred, struct node *node,
 	}
       else
 	flags |= TOUCH_ATIME;
-      
+
+      node->nn->may_need_sync = 1;
       /* fshelp_touch (&node->nn_stat, flags, cvsfs_maptime); */
     }
 

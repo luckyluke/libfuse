@@ -847,8 +847,18 @@ error_t netfs_attempt_write (struct iouser *cred, struct node *node,
 			     loff_t offset, size_t *len, void *data)
 {
   FUNC_PROLOGUE_NODE("netfs_attempt_write", node);
-  NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(EROFS);
+  size_t sz;
+
+  if(! fuse_ops->write)
+    FUNC_RETURN(EOPNOTSUPP);
+
+  sz = fuse_ops->write(node->nn->path, data, *len, offset);
+
+  if(sz < 0)
+    FUNC_RETURN(-sz);
+
+  *len = sz;
+  FUNC_EPILOGUE(0);
 }
 
 

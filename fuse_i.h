@@ -1,7 +1,7 @@
 /**********************************************************
  * fuse_i.h
  *
- * Copyright 2004, Stefan Siegl <ssiegl@gmx.de>, Germany
+ * Copyright (C) 2004, 2005 by Stefan Siegl <ssiegl@gmx.de>, Germany
  * 
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Publice License,
@@ -48,6 +48,11 @@ struct netnode {
 
   /* lock for *node pointer */
   struct mutex lock;
+
+  /* whether this is an anonymous node, i.e. it has to be deleted,
+   * after the last node associated to it, was removed.
+   */
+  unsigned anonymous :1;
 };
 
 /* make a new netnode for a specific path, with specified parent

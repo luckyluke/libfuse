@@ -507,6 +507,8 @@ netfs_report_access (struct iouser *cred, struct node *node, int *types)
   FUNC_PROLOGUE_NODE("netfs_report_access", node);
   *types = 0;
 
+  (void) netfs_validate_stat(node, cred);
+
   if (fshelp_access (&node->nn_stat, S_IREAD, cred) == 0)
     *types |= O_READ;
   

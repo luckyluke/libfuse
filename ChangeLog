@@ -2,4 +2,4 @@
 # ChangeLog is more or less available through CVS revision history
 # there is no separate file telling what was changed line by line ...
 
-exec lynx "http://cvs.berlios.de/cgi-bin/viewcvs.cgi/cvsfs4hurd/cvsfs/"
+exec lynx "http://cvs.berlios.de/cgi-bin/viewcvs.cgi/cvsfs4hurd/fuse4hurd/"

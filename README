@@ -1,0 +1,24 @@
+fuse4hurd - imitation of Linux's libfuse for the Hurd
+
+
+W H A T   I S   I T ? 
+  fuse4hurd is a library intended for the GNU Hurd trying to imitate the
+  API of the fuse library, available from http://fuse.sourceforge.net, for
+  Linux. It's based on Hurd's libnetfs and tries to bring all the fuse based
+  virtual filesystems over to the Hurd. However this results in being quite
+  a hack (at least for the time being)
+  
+
+H O W   T O   U S E   I T ? 
+  simply install fuse4hurd, which will copy a libfuse.{so,la,a} to your
+  /local/lib directory. Then simply try to build the fuse-based translator
+  as you'd like on Linux. In case it works, please tell - if not, you might
+  want to tell as well :-)
+
+ 
+Have fun with fuse4hurd
+  ... and let me hear any suggestions, send patches, etc.
+
+
+Stefan Siegl <ssiegl@gmx.de>
+$Id: README,v 1.2 2005/04/02 16:35:55 stesie Exp $

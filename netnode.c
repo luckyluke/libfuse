@@ -65,7 +65,7 @@ fuse_make_netnode(struct netnode *parent, const char *path)
   struct netnode *nn;
   int hash_value = fuse_netnode_hash_value(path);
 
-  DEBUG("netnodes_lock", "aquiring rwlock_reader_lock.\n");
+  DEBUG("netnodes_lock", "aquiring rwlock_reader_lock for %s.\n", path);
   rwlock_reader_lock(&fuse_netnodes_lock);
 
   hash_el = &fuse_netnodes[hash_value];
@@ -93,7 +93,7 @@ fuse_make_netnode(struct netnode *parent, const char *path)
   nn->node = NULL;
   mutex_init(&nn->lock);
 
-  DEBUG("netnodes_lock", "aquiring rwlock_writer_lock.\n");
+  DEBUG("netnodes_lock", "aquiring rwlock_writer_lock for %s.\n", path);
   rwlock_writer_lock(&fuse_netnodes_lock);
   nn->inode = fuse_next_inode ++;
 

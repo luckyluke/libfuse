@@ -3,7 +3,7 @@
 #
 # Copyright (C) 2005 Stefan Siegl <ssiegl@gmx.de>, Germany
 
-SUBDIRS = example
+SUBDIRS = 
 
 lib_LTLIBRARIES = libfuse.la
 

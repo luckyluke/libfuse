@@ -60,7 +60,7 @@ netfs_validate_stat (struct node *node, struct iouser *cred)
   error_t err = EOPNOTSUPP;
 
   if(fuse_ops->getattr)
-    err = fuse_ops->getattr(node->nn->path, &node->nn_stat);
+    err = -fuse_ops->getattr(node->nn->path, &node->nn_stat);
 
   FUNC_EPILOGUE(err);
 }

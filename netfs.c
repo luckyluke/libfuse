@@ -177,8 +177,12 @@ netfs_attempt_statfs (struct iouser *cred, struct node *node,
 		      fsys_statfsbuf_t *st)
 {
   FUNC_PROLOGUE_NODE("netfs_attempt_statfs", node);
-  NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(EOPNOTSUPP);
+  error_t err = EOPNOTSUPP;
+
+  if(fuse_ops->statfs)
+    err = -fuse_ops->statfs(node->nn->path, st);
+
+  FUNC_EPILOGUE(err);
 }
 
 

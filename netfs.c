@@ -870,33 +870,37 @@ netfs_attempt_utimes (struct iouser *cred, struct node *node,
 		      struct timespec *atime, struct timespec *mtime)
 {
   FUNC_PROLOGUE_NODE("netfs_attempt_utimes", node);
-  error_t err = fshelp_isowner (&node->nn_stat, cred);
-  int flags = TOUCH_CTIME;
+  error_t err = EOPNOTSUPP;
 
-  NOT_IMPLEMENTED();
-  
+  /* prepare utimebuf for fuse_ops->utime call */
+  struct utimbuf utb;
+  utb.actime = atime ? atime->tv_sec : node->nn_stat.st_atime;
+  utb.modtime = mtime ? mtime->tv_sec : node->nn_stat.st_mtime;
+
+  /* test whether operation is supported and permission are sufficient */
+  if(! fuse_ops->utime)
+    goto out;
+
+  if(netfs_validate_stat(node, cred))
+    goto out;
+
+  if((err = fshelp_isowner(&node->nn_stat, cred)))
+    goto out;
+
+  err = -fuse_ops->utime(node->nn->path, &utb);
+
   if (! err)
     {
-      if (mtime)
-	{
-	  node->nn_stat.st_mtime = mtime->tv_sec;
-	  node->nn_stat.st_mtime_usec = mtime->tv_nsec / 1000;
-	}
-      else
-	flags |= TOUCH_MTIME;
+      node->nn_stat.st_mtime = utb.modtime;
+      node->nn_stat.st_mtime_usec = 0;
       
-      if (atime)
-	{
-	  node->nn_stat.st_atime = atime->tv_sec;
-	  node->nn_stat.st_atime_usec = atime->tv_nsec / 1000;
-	}
-      else
-	flags |= TOUCH_ATIME;
-
+      node->nn_stat.st_atime = utb.actime;
+      node->nn_stat.st_atime_usec = 0;
+	
       node->nn->may_need_sync = 1;
-      /* fshelp_touch (&node->nn_stat, flags, cvsfs_maptime); */
     }
 
+ out:
   FUNC_EPILOGUE(err);
 }
 

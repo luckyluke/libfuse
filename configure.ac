@@ -5,7 +5,7 @@
 
 AC_PREREQ(2.59)
 AC_INIT(fuse4hurd, 0.1, ssiegl@gmx.de)
-AC_REVISION($Revision: 1.1 $)
+AC_REVISION($Revision: 1.2 $)
 AC_CONFIG_SRCDIR(main.c)
 AM_CONFIG_HEADER(config.h)
 
@@ -39,5 +39,5 @@ CFLAGS="$CFLAGS -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -Wall -W -ggdb"
 
 # Checks for library functions.
 
-AC_CONFIG_FILES([Makefile example/Makefile])
+AC_CONFIG_FILES([Makefile example/Makefile example-22/Makefile])
 AC_OUTPUT

@@ -40,13 +40,14 @@ struct fuse_dirhandle {
   unsigned found :1;
 
   /*** things needed for get_dirents ***********************/
-  int first_entry;         /* index of first entry to return */
-  int num_entries;         /* max. number of entries to return */
-  int count;               /* number of elements, we will return */
-  vm_size_t max_data_len;  /* max. size of memory we may allocate */
-  size_t size;             /* number of bytes necessary to return data */
+  int first_entry;         /* index of first entry to return (counted down
+			    * in helper function) */
+  int num_entries;         /* number of further entries we may write out to the
+			    * buffer, counted down in callback function*/
+  int count;               /* number of elements, we already wrote to buffer */
+  size_t size;             /* number of further bytes we may write to buffer */
   struct dirent *hdrpos;   /* where to write next dirent structure */
-  int max_name_len;        /* length of longest filename */
+  size_t maxlen;           /* (allocated) length of filename field, def 256 */
   struct netnode *parent;  /* netnode of the dir which's content we list */
 
   /*** things used here and there **************************/
@@ -661,6 +662,7 @@ error_t netfs_attempt_lookup (struct iouser *user, struct node *dir,
 		    name, dir->nn->path);
 
   error_t err;
+  fuse_dirh_t handle = NULL;
 
   if((err = netfs_validate_stat(dir, user))
      || (err = fshelp_access(&dir->nn_stat, S_IREAD, user))
@@ -695,9 +697,8 @@ error_t netfs_attempt_lookup (struct iouser *user, struct node *dir,
       /* lookup for common file */
       struct netnode *nn;
       char *path;
-      fuse_dirh_t handle = malloc(sizeof(struct fuse_dirhandle));
 
-      if(! handle)
+      if(! (handle = malloc(sizeof(struct fuse_dirhandle))))
 	{
 	  err = ENOMEM; /* sorry, translator not available ... */
 	  goto out;
@@ -751,6 +752,7 @@ out:
   else
     mutex_lock(&(*node)->lock);
 
+  free(handle);
   FUNC_EPILOGUE(err);
 }
 
@@ -1117,40 +1119,6 @@ error_t netfs_attempt_read (struct iouser *cred, struct node *node,
   ((DIRENT_NAME_OFFS + (name_len) + 1 + (DIRENT_ALIGN - 1))		      \
    & ~(DIRENT_ALIGN - 1))
 
-/* callback handler used by netfs_get_dirents to calculate amount of 
- * memory necessary to return directory entries 
- */
-static int
-fuse_bump_helper(fuse_dirh_t handle, const char *name, int type)
-{
-  (void) type; /* we just allocate the memory, type is not of interest
-		* for that .. */
-
-  if(handle->first_entry)
-    {
-      /* skip this entry, it's before the first one we got to write out ... */
-      handle->first_entry --;
-      return 0;
-    }
-
-  if(handle->num_entries || handle->count < handle->num_entries)
-    {
-      int name_len = strlen(name);
-      size_t new_size = handle->size + DIRENT_LEN(name_len);
-
-      handle->max_name_len =
-	handle->max_name_len < name_len ? name_len : handle->max_name_len;
-
-      if(handle->max_data_len && new_size > handle->max_data_len)
-	return 0; /* not enough space left */
-
-      handle->size = new_size;
-      handle->count ++;
-    }
-  return 0;
-}
-
-
 
 /* callback handler used by netfs_get_dirents to write our dirents
  * to the mmaped memory
@@ -1160,14 +1128,17 @@ fuse_bump_helper(fuse_dirh_t handle, const char *name, int type)
 static int
 fuse_dirent_helper(fuse_dirh_t handle, const char *name, int type, ino_t ino)
 {
-  size_t name_len;
-  size_t dirent_len;
-  struct netnode *nn;
-  size_t inode;
+  ino_t inode;
 
-  if(! fuse_use_ino)
-    return fuse_dirent_helper_compat(handle, name, type);
+  /* if(! fuse_use_ino)
+   *   return fuse_dirent_helper_compat(handle, name, type);
+   */
 
+  /* fuse_get_inode
+   *
+   * look up the inode of the named file (full path) in fuse_use_ino mode,
+   * where we don't have the inode number of parent directories in our structs
+   */
   ino_t fuse_get_inode(const char *name)
     {
       struct stat stat;
@@ -1186,25 +1157,63 @@ fuse_dirent_helper(fuse_dirh_t handle, const char *name, int type, ino_t ino)
       return 0;
     }
 
-  if(! handle->count)
-    /* already wrote all entries, get outta here */
+  if(! (handle->num_entries --))
     return ENOMEM;
 
-  name_len = strlen(name);
-  dirent_len = DIRENT_LEN(name_len);
+  size_t name_len = strlen(name);
+  size_t dirent_len = DIRENT_LEN(name_len);
+
+  if(dirent_len > handle->size)
+    {
+      handle->num_entries = 0; /* don't write any further data, e.g. in case */
+      return ENOMEM;           /* next filename's shorter */
+    }
+  else
+    handle->size -= dirent_len;
 
   /* look the inode of this element up ... */
-  if(! strcmp(name, "."))
-    inode = fuse_get_inode(handle->parent->path);
+  if(fuse_use_ino)
+    {
+      /* using the inode based api */
+      if(! strcmp(name, "."))
+	inode = fuse_get_inode(handle->parent->path);
 
-  else if(handle->parent->parent && ! strcmp(name, ".."))
-    inode = fuse_get_inode(handle->parent->parent->path);
+      else if(handle->parent->parent && ! strcmp(name, ".."))
+	inode = fuse_get_inode(handle->parent->parent->path);
 
+      else
+	inode = ino;
+    }
   else
     {
-      strcpy(handle->filename, name);
-      nn = fuse_make_netnode(handle->parent, handle->abspath);
-      inode = ino;
+      /* using the old (lookup) method ... */
+
+      if(! strcmp(name, "."))
+	inode = handle->parent->inode;
+
+      else if(handle->parent->parent && ! strcmp(name, ".."))
+	inode = handle->parent->parent->inode;
+
+      else
+	{
+	  if(name_len > handle->maxlen)
+	    {
+	      /* allocated field in handle structure is to small, enlarge it */
+	      handle->maxlen = name_len << 1;
+	      void *a = realloc(handle->abspath, handle->maxlen +
+				(handle->filename - handle->abspath) + 1);
+	      if(! a)
+		return ENOMEM;
+
+	      handle->filename = a + (handle->filename - handle->abspath);
+	      handle->abspath = a;
+	    }
+
+	  strcpy(handle->filename, name);
+	  struct netnode *nn = fuse_make_netnode(handle->parent,
+						 handle->abspath);
+	  inode = nn->inode;
+	}
     }
 
   /* write out struct dirent ... */
@@ -1233,53 +1242,7 @@ fuse_dirent_helper(fuse_dirh_t handle, const char *name, int type, ino_t ino)
 static int
 fuse_dirent_helper_compat(fuse_dirh_t handle, const char *name, int type)
 {
-  size_t name_len;
-  size_t dirent_len;
-  struct netnode *nn;
-  ino_t inode;
-
-  if(handle->first_entry)
-    {
-      /* skip this entry, it's before the first one we got to write out ... */
-      handle->first_entry --;
-      return 0;
-    }
-
-  if(! handle->count)
-    /* already wrote all entries, get outta here */
-    return ENOMEM;
-
-  name_len = strlen(name);
-  dirent_len = DIRENT_LEN(name_len);
-
-  /* look the inode of this element up ... */
-  if(! strcmp(name, "."))
-    inode = handle->parent->inode;
-
-  else if(handle->parent->parent && ! strcmp(name, ".."))
-    inode = handle->parent->parent->inode;
-
-  else
-    {
-      strcpy(handle->filename, name);
-      nn = fuse_make_netnode(handle->parent, handle->abspath);
-      inode = nn->inode;
-    }
-
-  /* write out struct dirent ... */
-  handle->hdrpos->d_fileno = inode;
-  handle->hdrpos->d_reclen = dirent_len;
-  handle->hdrpos->d_type = type;
-  handle->hdrpos->d_namlen = name_len;
-
-  /* copy file's name ... */
-  memcpy(((void *) handle->hdrpos) + DIRENT_NAME_OFFS, name, name_len + 1);
-
-  /* update hdrpos pointer */
-  handle->hdrpos = ((void *) handle->hdrpos) + dirent_len;
-
-  handle->count --;
-  return 0;
+  return fuse_dirent_helper(handle, name, type, 0);
 }
 
 
@@ -1289,81 +1252,68 @@ netfs_get_dirents (struct iouser *cred, struct node *dir,
 		   mach_msg_type_number_t *data_len,
 		   vm_size_t max_data_len, int *data_entries)
 {
+  (void) max_data_len; /* we live with the supplied mmap area in any case,
+			* i.e. never allocate any further memory */
+
   FUNC_PROLOGUE_NODE("netfs_get_dirents", dir);
-  error_t err;
+  error_t err = EOPNOTSUPP;
   fuse_dirh_t handle;
 
   if(! FUSE_OP_HAVE(getdir))
-    FUNC_RETURN(EOPNOTSUPP);
+    goto out;
 
   if((err = netfs_validate_stat(dir, cred))
      || (err = fshelp_access(&dir->nn_stat, S_IREAD, cred))
      || (err = fshelp_access(&dir->nn_stat, S_IEXEC, cred)))
-    FUNC_RETURN(err);
+    goto out;
 
   if(! (handle = malloc(sizeof(struct fuse_dirhandle))))
-    FUNC_RETURN(ENOMEM); /* sorry, translator not available ... */
+    {
+      err = ENOMEM; /* sorry, translator not available ... */
+      goto out;
+    }
 
   handle->first_entry = first_entry;
   handle->num_entries = num_entries;
   handle->count = 0;
-  handle->max_data_len = max_data_len;
-  handle->size = 0;
-
-  /* using fuse_bump_helper for new and old api, since we just allocate
-   * the memory for real calls, done later.
-   */
-  err = FUSE_OP_CALL(getdir, dir->nn->path, handle, (void *)fuse_bump_helper);
-  
-  if(err)
-    {
-      free(handle);
-      FUNC_RETURN(err);
-    }
+  handle->size = *data_len;
 
   /* allocate handle->abspath */
-  {
-    size_t path_len = strlen(dir->nn->path);
-
-    if(! (handle->abspath = malloc(path_len + handle->max_name_len + 2)))
-      {
-	free(handle);
-	FUNC_RETURN(ENOMEM);
-      }
-
-    memcpy(handle->abspath, dir->nn->path, path_len);
-    handle->filename = handle->abspath + path_len;
-
-    /* add a delimiting slash if there are parent directories */
-    if(dir->nn->parent)
-      *(handle->filename ++) = '/';
-
-    handle->parent = dir->nn;
-  }
-
-  /* Allocate it.  */
-  *data = mmap (0, handle->size, PROT_READ | PROT_WRITE, MAP_ANON, 0, 0);
-  err = ((void *) *data == (void *) -1) ? errno : 0;
-
-  if(! err)
+  size_t path_len = strlen(dir->nn->path);
+  if(! (handle->abspath = malloc((handle->maxlen = 256) + path_len + 2)))
     {
-      /* okay, fill our memory piece now ... */
-      *data_len = handle->size;
-      *data_entries = handle->count;
-      
-      /* restore first_entry value, which got destroyed by our bump-helper */
-      handle->first_entry = first_entry;
-
-      handle->hdrpos = (struct dirent*) *data;
-
-      if(fuse_ops)
-	fuse_ops->getdir(dir->nn->path, handle, fuse_dirent_helper);
-      else
-	fuse_ops_compat->getdir(dir->nn->path, handle,
-				fuse_dirent_helper_compat);
+      free(handle);
+      err = ENOMEM;
+      goto out;
     }
 
+  memcpy(handle->abspath, dir->nn->path, path_len);
+  handle->filename = handle->abspath + path_len;
+
+  /* add a delimiting slash if there are parent directories */
+  if(dir->nn->parent)
+    *(handle->filename ++) = '/';
+
+  handle->parent = dir->nn;
+  handle->hdrpos = (struct dirent*) *data;
+
+  if(fuse_ops)
+    fuse_ops->getdir(dir->nn->path, handle, fuse_dirent_helper);
+  else
+    fuse_ops_compat->getdir(dir->nn->path, handle, fuse_dirent_helper_compat);
+			    
+
+  *data_len -= handle->size; /* subtract number of bytes left in the
+			      * buffer from the length of the buffer we
+			      * got. */
+  *data_entries = handle->count;
+
   /* TODO: fshelp_touch ATIME here */
+  free(handle->abspath);
+  free(handle);
+
+ out:
+  return err;
   FUNC_EPILOGUE_FMT(err, "%d entries.", *data_entries);
 }
 
@@ -1374,6 +1324,7 @@ void
 netfs_node_norefs (struct node *node)
 {
   FUNC_PROLOGUE_NODE("netfs_node_norefs", node);
+  assert(node);
 
   DEBUG("netnode-lock", "locking netnode, path=%s\n", node->nn->path);
   mutex_lock(&node->nn->lock);

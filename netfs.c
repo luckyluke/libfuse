@@ -253,19 +253,27 @@ netfs_check_open_permissions (struct iouser *user, struct node *node,
   FUNC_PROLOGUE_NODE("netfs_check_open_permissions", node);
   error_t err = 0;
 
-  /* it's a directory, we need to check permissions on our own ... */
-  if (flags & O_READ)
-    err = fshelp_access (&node->nn_stat, S_IREAD, user);
-  
-  if (!err && (flags & O_WRITE))
-    err = fshelp_access (&node->nn_stat, S_IWRITE, user);
-  
-  if (!err && (flags & O_EXEC))
-    err = fshelp_access (&node->nn_stat, S_IEXEC, user);
+  if(fuse_ops->open)
+    {
+      err = -fuse_ops->open(node->nn->path, flags);
 
-  /* FIXME
-   * call fuse_ops->open() to check for permission
-   */
+      if(! err && fuse_ops->release)
+	(void)fuse_ops->release(node->nn->path, flags);
+    }
+  else
+    {
+      /* the fuse translator doesn't bring an open routine with it.
+       * try to figure out whether writing should be okay
+       */
+      if (flags & O_READ)
+	err = fshelp_access (&node->nn_stat, S_IREAD, user);
+      
+      if (!err && (flags & O_WRITE))
+	err = fshelp_access (&node->nn_stat, S_IWRITE, user);
+      
+      if (!err && (flags & O_EXEC))
+	err = fshelp_access (&node->nn_stat, S_IEXEC, user);
+    }
 
   FUNC_EPILOGUE(err);
 }

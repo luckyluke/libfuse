@@ -167,7 +167,7 @@ extern FILE *debug_port;
 
 
 /* malloc debugging */
-#if 1
+#if 0
 static char *_strdup(const char *s, const char *f, int l) {
 void *ptr = strdup(s);
 DEBUG("strdup", "ptr=%8p [%s:%d]\n", ptr, f, l);
@@ -188,6 +188,6 @@ DEBUG("  free", "ptr=%8p [%s:%d]\n", ptr, f, l);
 free(ptr);
 }
 #define free(s) _free(s, __FILE__, __LINE__)
-#endif
+#endif /* malloc debugging */
 
 #endif /* FUSE_INTERNAL_H */

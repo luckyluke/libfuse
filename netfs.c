@@ -111,6 +111,20 @@ netfs_attempt_create_file (struct iouser *user, struct node *dir,
    */
   err = -fuse_ops->mknod(path, (mode & ALLPERMS) | S_IFREG, 0);
 
+  /* If available, call chown to make clear which uid/gid to assign to the
+   * new file.  Testing with 'fusexmp' I noticed that new files might be
+   * created with wrong gids -- root instead of $user in my case  :(
+   *
+   * TODO reconsider whether we should setuid/setgid the fuse_ops->mknod
+   * call instead (especially if mknod is not available or returns errors)
+   */
+  if(! err && fuse_ops->chown) {
+    assert(user->uids->ids[0]);
+    assert(user->gids->ids[0]);
+
+    (void)fuse_ops->chown(path, user->uids->ids[0], user->gids->ids[0]);
+  }
+
  out:
   if(err)
     *node = NULL;

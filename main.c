@@ -30,10 +30,16 @@ int netfs_maxsymlinks = 12;
 /* pointer to the fuse_operations structure of this translator process */
 const struct fuse_operations *fuse_ops = NULL;
 
+/* the port where to write out debug messages to, NULL to omit these */
+FILE *debug_port = NULL;
+
 void
 fuse_main(int argc, char *argv[], const struct fuse_operations *op)
 {
   mach_port_t bootstrap, ul_node;
+
+  /* print debug messages out to standard error */
+  debug_port = stderr;
 
   task_get_bootstrap_port(mach_task_self(), &bootstrap);
   if(bootstrap == MACH_PORT_NULL)

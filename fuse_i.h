@@ -64,4 +64,71 @@ struct netnode *fuse_make_netnode(struct netnode *parent, const char *path);
 /* make a new node for a specific netnode */
 struct node *fuse_make_node(struct netnode *nn);
 
+
+
+/*****************************************************************************
+ *** debug cruft                                                           ***
+ *****************************************************************************/
+
+/* the port where to write out debug messages to, NULL to omit these */
+extern FILE *debug_port;
+
+#define DEBUG(cat,msg...) \
+  if(debug_port) \
+    fprintf(debug_port, PACKAGE ": " cat ": " msg);
+
+#define FUNC_PROLOGUE_(func_name, fmt...) \
+  do \
+    { \
+      const char *debug_func_name = func_name; \
+      DEBUG("tracing", "entering %s (" __FILE__ ":%d) ", \
+	    debug_func_name, __LINE__); \
+      if(debug_port) \
+        { \
+          fmt; \
+	  fprintf(debug_port, "\n"); \
+	}
+
+#define FUNC_PROLOGUE(func_name) \
+  FUNC_PROLOGUE_(func_name, (void)0)
+
+#define FUNC_PROLOGUE_FMT(func_name, fmt...) \
+  FUNC_PROLOGUE_(func_name, fprintf(debug_port, fmt))
+
+#define FUNC_PROLOGUE_NODE(func_name, node) \
+  FUNC_PROLOGUE_FMT(func_name, "node=%s", (node)->nn->path)
+
+#define FUNC_EPILOGUE_NORET() \
+      DEBUG("tracing", "leaving %s\n", debug_func_name); \
+    } while(0);
+
+#define FUNC_RETURN_(ret, fmt) \
+      { \
+        int retval = (ret); \
+        DEBUG("tracing", "leaving %s (" __FILE__ ":%d) ret=%d ", \
+	      debug_func_name, __LINE__, retval); \
+        if(debug_port) \
+          { \
+	    fmt; \
+	    fprintf(debug_port, "\n"); \
+	  } \
+        return retval; \
+      }
+
+#define FUNC_EPILOGUE_(ret, fmt) \
+      FUNC_RETURN_(ret, fmt) \
+    } while(0);
+
+#define FUNC_RETURN_FMT(ret, fmt...) \
+  FUNC_RETURN_(ret, fprintf(debug_port, fmt))
+
+#define FUNC_EPILOGUE_FMT(ret, fmt...) \
+  FUNC_EPILOGUE_(ret, fprintf(debug_port, fmt))
+
+#define FUNC_RETURN(ret) \
+  FUNC_RETURN_(ret, (void)0)
+
+#define FUNC_EPILOGUE(ret) \
+  FUNC_EPILOGUE_(ret, (void)0)
+
 #endif /* FUSE_INTERNAL_H */

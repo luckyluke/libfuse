@@ -289,8 +289,12 @@ error_t netfs_attempt_chmod (struct iouser *cred, struct node *node,
 			     mode_t mode)
 {
   FUNC_PROLOGUE_NODE("netfs_attempt_chmod", node);
-  NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(EROFS);
+  error_t err = EROFS;
+
+  if(fuse_ops->chmod)
+    err = -fuse_ops->chmod(node->nn->path, mode);
+
+  FUNC_EPILOGUE(err);
 }
 
 

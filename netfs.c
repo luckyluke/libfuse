@@ -1,5 +1,5 @@
 /**********************************************************
- * main.c
+ * netfs.c
  *
  * Copyright(C) 2004, 2005 by Stefan Siegl <ssiegl@gmx.de>, Germany
  * 
@@ -365,8 +365,12 @@ error_t
 netfs_attempt_sync (struct iouser *cred, struct node *node, int wait)
 {
   FUNC_PROLOGUE_NODE("netfs_attempt_sync", node);
-  NOT_IMPLEMENTED();
-  FUNC_EPILOGUE(0);
+  error_t err = EOPNOTSUPP;
+
+  if(fuse_ops->fsync)
+    err = -fuse_ops->fsync(node->nn->path, 0);
+
+  FUNC_EPILOGUE(err);
 }
 
 

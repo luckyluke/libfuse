@@ -6,7 +6,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Publice License,
  * version 2 or any later. The license is contained in the COPYING
- * file that comes with the fuse4hurd distribution.
+ * file that comes with the libfuse distribution.
  *
  * callback functions for libnetfs
  */
@@ -384,7 +384,7 @@ error_t netfs_attempt_mkfile (struct iouser *user, struct node *dir,
 
   do 
     {
-      snprintf(name, sizeof(name), ".fuse4hurd-%06d", num ++);
+      snprintf(name, sizeof(name), ".libfuse-%06d", num ++);
       err = netfs_attempt_create_file(user, dir, name, mode, node);
 
       if(err == EEXIST)

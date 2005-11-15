@@ -4,13 +4,13 @@
 # Copyright (C) 2005 by Stefan Siegl <ssiegl@gmx.de>, Germany
 
 AC_PREREQ(2.59)
-AC_INIT(fuse4hurd, 0.1, ssiegl@gmx.de)
-AC_REVISION($Revision: 1.2 $)
+AC_INIT(libfuse, 0.1, hurdextras-hackers@nongnu.org)
+AC_REVISION($Revision: 1.3 $)
 AC_CONFIG_SRCDIR(main.c)
 AM_CONFIG_HEADER(config.h)
 
 # Initialize automake
-AM_INIT_AUTOMAKE(fuse4hurd, 0.1)
+AM_INIT_AUTOMAKE(libfuse, 0.1)
 
 # Checks for programs.
 m4_ifdef([LT_INIT], [LT_INIT], [AC_PROG_LIBTOOL])

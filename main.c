@@ -6,7 +6,7 @@
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Publice License,
  * version 2 or any later. The license is contained in the COPYING
- * file that comes with the fuse4hurd distribution.
+ * file that comes with the libfuse distribution.
  *
  * translator startup code (and argp handling)
  */

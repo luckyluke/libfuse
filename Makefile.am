@@ -16,3 +16,8 @@ libfuse_la_SOURCES = 	\
 	node.c
 
 libfuse_la_LDFLAGS = -version-number 0:0:1
+
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = fuse.pc
+
+$(pkgconfig_DATA): config.status

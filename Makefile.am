@@ -5,6 +5,9 @@
 
 SUBDIRS = 
 
+fuseincludedir=$(includedir)/fuse
+fuseinclude_HEADERS = fuse.h fuse_compat.h
+
 lib_LTLIBRARIES = libfuse.la
 
 libfuse_la_SOURCES = 	\

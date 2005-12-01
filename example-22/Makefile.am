@@ -7,5 +7,4 @@ null_SOURCES = null.c
 hello_SOURCES = hello.c
 
 LDADD = ../libfuse.la
-CFLAGS = @CFLAGS@ -DFUSE_USE_VERSION=22
-
+AM_CPPFLAGS = -DFUSE_USE_VERSION=22 -I$(top_srcdir)

@@ -7,3 +7,4 @@ null_SOURCES = null.c
 hello_SOURCES = hello.c
 
 LDADD = ../libfuse.la
+AM_CPPFLAGS = -I$(top_srcdir)

@@ -610,47 +610,6 @@ netfs_report_access (struct iouser *cred, struct node *node, int *types)
 }
 
 
-/* callback-helper of netfs_attempt_lookup, check whether the name of
- * file (of this callback) is equal to the one we're looking for, in case
- * set 'found' from fuse_dirh_t handle to TRUE.
- *
- * version for new fuse API (since 2.1)
- */
-static int
-fuse_lookup_helper(fuse_dirh_t handle, const char *name, int type, ino_t ino)
-{
-  (void) type; /* we want to know whether the file exists at all,
-		* the type is not of any interest */
-  (void) ino;  /* we don't care for inodes here, netfs_validate_stat does it */
-
-  if(! strcmp(name, handle->filename))
-    {
-      handle->found = 1;
-      return ENOMEM; /* send ENOMEM to stop being called, TODO make sure that
-		      * all programs, depending on libfuse, can live with that.
-		      */
-    }
-
-  return 0;
-}
-
-
-/* callback-helper of netfs_attempt_lookup, check whether the name of
- * file (of this callback) is equal to the one we're looking for, in case
- * set 'found' from fuse_dirh_t handle to TRUE.
- *
- * version for old API
- */
-static int
-fuse_lookup_helper_compat(fuse_dirh_t handle, const char *name, int type)
-{
-  assert(fuse_use_ino == 0);
-  return fuse_lookup_helper(handle, name, type, 0); /* set ino to 0, it will
-						     * be ignored anyways,
-						     * since fuse_use_ino 
-						     * is off.     */
-}
-
 /* Lookup NAME in DIR for USER; set *NODE to the found name upon return.  If
    the name was not found, then return ENOENT.  On any error, clear *NODE.
    (*NODE, if found, should be locked, this call should unlock DIR no matter
@@ -662,7 +621,6 @@ error_t netfs_attempt_lookup (struct iouser *user, struct node *dir,
 		    name, dir->nn->path);
 
   error_t err;
-  fuse_dirh_t handle = NULL;
 
   if((err = netfs_validate_stat(dir, user))
      || (err = fshelp_access(&dir->nn_stat, S_IREAD, user))
@@ -692,56 +650,26 @@ error_t netfs_attempt_lookup (struct iouser *user, struct node *dir,
 	err = EAGAIN;
     }
 
-  else if(FUSE_OP_HAVE(getdir))
+  else if(FUSE_OP_HAVE(getattr))
     {
       /* lookup for common file */
       struct netnode *nn;
       char *path;
+      struct stat stbuf;
 
-      if(! (handle = malloc(sizeof(struct fuse_dirhandle))))
-	{
-	  err = ENOMEM; /* sorry, translator not available ... */
-	  goto out;
-	}
-
-      handle->found = 0;
-      handle->filename = name;
-	
-      if(fuse_ops)
-	fuse_ops->getdir(dir->nn->path, handle, fuse_lookup_helper);
-      else
-	fuse_ops_compat->getdir(dir->nn->path, handle,
-				fuse_lookup_helper_compat);
-
-      /* we cannot rely on exit status of ->getdir() func, since we
-       * return an error from the helper to abort write out
-       */
-
-      if(! handle->found)
-	{
-	  err = ENOENT;
-	  goto out;
-	}
-
-      /* well, file exists - create a handle ... */
-      if(! (path = malloc(strlen(dir->nn->path) + strlen(name) + 2)))
+      if(asprintf(&path, "%s/%s",
+		  dir->nn->parent ? dir->nn->path : "", name) < 0)
 	{
 	  err = ENOMEM;
 	  goto out;
 	}
 
-      sprintf(path, "%s/%s", dir->nn->parent ? dir->nn->path : "", name);
-      nn = fuse_make_netnode(dir->nn, path);
+      if(! (err = -FUSE_OP_CALL(getattr, path, &stbuf)))
+	if(! (nn = fuse_make_netnode(dir->nn, path)) ||
+	   ! (*node = fuse_make_node(nn)))
+	  err = ENOMEM;
+
       free(path); /* fuse_make_netnode strdup()s the pathname */
-
-      if(! path)
-	{
-	  err = ENOMEM;
-	  goto out;
-	}
-
-      if((*node = fuse_make_node(nn)))
-	err = 0;
     }
 
 out:
@@ -752,7 +680,6 @@ out:
   else
     mutex_lock(&(*node)->lock);
 
-  free(handle);
   FUNC_EPILOGUE(err);
 }
 

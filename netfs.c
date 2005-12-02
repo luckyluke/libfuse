@@ -1235,7 +1235,6 @@ netfs_get_dirents (struct iouser *cred, struct node *dir,
   free(handle);
 
  out:
-  return err;
   FUNC_EPILOGUE_FMT(err, "%d entries.", *data_entries);
 }
 

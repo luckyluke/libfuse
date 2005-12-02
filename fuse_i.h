@@ -138,8 +138,8 @@ extern FILE *debug_port;
 #define FUNC_RETURN_(ret, fmt) \
       { \
         int retval = (ret); \
-        DEBUG("tracing", "leaving %s (" __FILE__ ":%d) ret=%d ", \
-	      debug_func_name, __LINE__, retval); \
+        DEBUG("tracing", "leaving %s (" __FILE__ ":%d) ret=%d (%s) ", \
+	      debug_func_name, __LINE__, retval, strerror(retval));	\
         if(debug_port) \
           { \
 	    fmt; \

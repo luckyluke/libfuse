@@ -1,0 +1,35 @@
+-*- mode: outline -*-
+
+* example fusexmp crash
+
+Running the example fusexmp file system, the translator crashes (and the whole
+system might also crash) if you try to run a binary from within that file
+system, e.g.
+
+$ settrans -ac f ./fusexmp
+$ cd f
+$ bin/ls
+
+* example null
+
+The example null file system does not return zeroes (which it is supposed to
+do, I think):
+
+$ settrans -ac n ./null
+$ od -x -N 10 < n
+0000000 01f4 0000 0000 3000 0002
+0000012
+
+Is the following fix correct?
+
+--- netfs.c     15 Nov 2005 23:43:05 -0000      1.30
++++ netfs.c     2 Dec 2005 00:03:45 -0000
+@@ -1090,6 +1101,8 @@
+      || (err = fshelp_access(&node->nn_stat, S_IREAD, cred)))
+     goto out;
+
++  memset(data, 0, *len);
++
+   int sz = fuse_ops ?
+     (fuse_ops->read(node->nn->path, data, *len, offset, &node->nn->info)) :
+     (fuse_ops_compat->read(node->nn->path, data, *len, offset));

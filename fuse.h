@@ -24,7 +24,7 @@
 #define FUSE_MAJOR_VERSION 2
 
 /** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 2
+#define FUSE_MINOR_VERSION 3
 
 /* This interface uses 64 bit off_t */
 #if _FILE_OFFSET_BITS != 64
@@ -47,18 +47,19 @@ extern "C" {
 /** Handle for a FUSE filesystem */
 struct fuse;
 
-/** Handle for a getdir() operation */
-typedef struct fuse_dirhandle *fuse_dirh_t;
-
-/** Function to add an entry in a getdir() operation
+/** Function to add an entry in a readdir() operation
  *
- * @param h the handle passed to the getdir() operation
+ * @param buf the buffer passed to the readdir() operation
  * @param name the file name of the directory entry
- * @param type the file type (0 if unknown)  see <dirent.h>
- * @param ino the inode number, ignored if "use_ino" mount option is
- *            not specified
- * @return 0 on success, -errno on error
+ * @param stat file attributes, can be NULL
+ * @param off offset of the next entry or zero
+ * @return 1 if buffer is full, zero otherwise
  */
+typedef int (*fuse_fill_dir_t) (void *buf, const char *name,
+                                const struct stat *stat, off_t off);
+
+/* Used by deprecated getdir() method */
+typedef struct fuse_dirhandle *fuse_dirh_t;
 typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
                               ino_t ino);
 
@@ -85,9 +86,10 @@ struct fuse_file_info {
  * negated error value (-errno) directly.
  *
  * All methods are optional, but some are essential for a useful
- * filesystem (e.g. getattr).  Flush, release and fsync are special
- * purpose methods, without which a full featured filesystem can still
- * be implemented.
+ * filesystem (e.g. getattr).  Flush, release, fsync, opendir,
+ * releasedir, fsyncdir, init and destroy are special purpose
+ * methods, without which a full featured filesystem can still be
+ * implemented.
  */
 struct fuse_operations {
     /** Get file attributes.
@@ -108,12 +110,7 @@ struct fuse_operations {
      */
     int (*readlink) (const char *, char *, size_t);
 
-    /** Read the contents of a directory
-     *
-     * This operation is the opendir(), readdir(), ..., closedir()
-     * sequence in one call. For each directory entry the filldir
-     * function should be called.
-     */
+    /* Deprecated, use readdir() instead */
     int (*getdir) (const char *, fuse_dirh_t, fuse_dirfil_t);
 
     /** Create a file node
@@ -241,6 +238,61 @@ struct fuse_operations {
 
     /** Remove extended attributes */
     int (*removexattr) (const char *, const char *);
+
+    /** Open direcory
+     *
+     * This method should check if the open operation is permitted for
+     * this  directory
+     */
+    int (*opendir) (const char *, struct fuse_file_info *);
+
+    /** Read directory
+     *
+     * This supersedes the old getdir() interface.  New applications
+     * should use this.
+     *
+     * The filesystem may choose between two modes of operation:
+     *
+     * 1) The readdir implementation ignores the offset parameter, and
+     * passes zero to the filler function's offset.  The filler
+     * function will not return '1' (unless an error happens), so the
+     * whole directory is read in a single readdir operation.  This
+     * works just like the old getdir() method.
+     *
+     * 2) The readdir implementation keeps track of the offsets of the
+     * directory entries.  It uses the offset parameter and always
+     * passes non-zero offset to the filler function.  When the buffer
+     * is full (or an error happens) the filler function will return
+     * '1'.
+     */
+    int (*readdir) (const char *, void *, fuse_fill_dir_t, off_t,
+                    struct fuse_file_info *);
+
+    /** Release directory */
+    int (*releasedir) (const char *, struct fuse_file_info *);
+
+    /** Synchronize directory contents
+     *
+     * If the datasync parameter is non-zero, then only the user data
+     * should be flushed, not the meta data
+     */
+    int (*fsyncdir) (const char *, int, struct fuse_file_info *);
+
+    /**
+     * Initialize filesystem
+     *
+     * The return value will passed in the private_data field of
+     * fuse_context to all file operations and as a parameter to the
+     * destroy() method.
+     */
+    void *(*init) (void);
+
+    /**
+     * Clean up filesystem
+     *
+     * Called on filesystem exit.
+     */
+    void (*destroy) (void *);
 };
 
 /** Extra context that may be needed by some filesystems
@@ -261,7 +313,7 @@ struct fuse_context {
     /** Thread ID of the calling process */
     pid_t pid;
 
-    /** Currently unused */
+    /** Private filesystem data */
     void *private_data;
 };
 

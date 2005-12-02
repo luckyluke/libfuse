@@ -39,3 +39,8 @@ Is the following fix correct?
 * <hurd/netfs.h>
 
 We're supposed to define netfs_make_user().
+
+
+* readdir()
+FUSE's readdir() needs to be supported in netfs_attempt_lookup() and
+netfs_get_dirents().

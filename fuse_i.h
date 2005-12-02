@@ -17,7 +17,7 @@
 #ifdef FUSE_USE_VERSION
 #  include "fuse.h"
 #else
-#  define FUSE_USE_VERSION 22
+#  define FUSE_USE_VERSION 23
 #  include "fuse.h"
 #  include "fuse_compat.h"
 #endif

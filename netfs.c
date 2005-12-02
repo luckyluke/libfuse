@@ -36,10 +36,6 @@
 
 /* fuse_dirhandle, passed to ops->getdir to store our information */
 struct fuse_dirhandle {
-  /*** stuff needed for attempt_lookup *********************/
-  unsigned found :1;
-
-  /*** things needed for get_dirents ***********************/
   int first_entry;         /* index of first entry to return (counted down
 			    * in helper function) */
   int num_entries;         /* number of further entries we may write out to the
@@ -50,7 +46,6 @@ struct fuse_dirhandle {
   size_t maxlen;           /* (allocated) length of filename field, def 256 */
   struct netnode *parent;  /* netnode of the dir which's content we list */
 
-  /*** things used here and there **************************/
   char *abspath;
   char *filename;
 };

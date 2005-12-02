@@ -10,6 +10,7 @@ $ settrans -ac f ./fusexmp
 $ cd f
 $ bin/ls
 
+
 * example null
 
 The example null file system does not return zeroes (which it is supposed to
@@ -33,3 +34,8 @@ Is the following fix correct?
    int sz = fuse_ops ?
      (fuse_ops->read(node->nn->path, data, *len, offset, &node->nn->info)) :
      (fuse_ops_compat->read(node->nn->path, data, *len, offset));
+
+
+* <hurd/netfs.h>
+
+We're supposed to define netfs_make_user().

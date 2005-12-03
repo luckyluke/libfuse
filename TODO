@@ -10,6 +10,20 @@ $ settrans -ac f ./fusexmp
 $ cd f
 $ bin/ls
 
+** single-threaded operation
+
+   The libfuse/Linux does allow to force single-threaded operation (`-s'
+   command line arg).  This was somewhat the hardcoded default case for
+   the Hurd variant so far (mainly for debugging reasons).  
+
+   Single-threaded operation is necessary for parts of the Perl and
+   Python bindings, where the filesystem callbacks would confuse the
+   main interpreter. 
+
+   libfuse/Hurd does use multi-threaded operation by default as well
+   now. This is, the fusexmp translator should work like a charm now (at
+   least when it comes to this issue).
+
 
 * example null
 
@@ -35,10 +49,23 @@ Is the following fix correct?
      (fuse_ops->read(node->nn->path, data, *len, offset, &node->nn->info)) :
      (fuse_ops_compat->read(node->nn->path, data, *len, offset));
 
+** libfuse/Linux doesn't return null-bytes as well
+
+   Since it isn't of any practical use for a meaningful filesystem, 
+   I would vote against applying it.
+
 
 * <hurd/netfs.h>
 
 We're supposed to define netfs_make_user().
+
+** are we?
+
+   I cannot find any appearance in the Hurd sources except for the
+   netfs.h header file.
+
+   Is this just one relict there or is it of any use? The task sounds
+   rather like another libraries and not a filesystem's job.
 
 
 * readdir()

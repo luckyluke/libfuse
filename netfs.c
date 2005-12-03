@@ -77,6 +77,15 @@ netfs_validate_stat (struct node *node, struct iouser *cred)
       node->nn_stat.st_dev = getpid();
       node->nn_stat.st_blksize = 1 << 12; /* there's probably no sane default,
 					   * use 4 kB for the moment */
+
+      if(libfuse_params.force_uid)
+	node->nn_stat.st_uid = libfuse_params.uid;
+
+      if(libfuse_params.force_gid)
+	node->nn_stat.st_gid = libfuse_params.gid;
+
+      if(libfuse_params.force_umask)
+	node->nn_stat.st_mode &= ~libfuse_params.umask;
     }
 
   FUNC_EPILOGUE(err);

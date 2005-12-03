@@ -27,7 +27,7 @@
 #define NOT_IMPLEMENTED() \
     fprintf(stderr, PACKAGE ": functionality not yet implemented in " \
 	    __FILE__ ":%d\nyou're welcome to put your effort to here.\n\n", \
-	    __LINE__);
+	    __LINE__)
 
 /* pointer to the fuse_operations structure of this translator process */
 extern int fuse_use_ino;
@@ -108,7 +108,7 @@ extern FILE *debug_port;
 
 #define DEBUG(cat,msg...) \
   if(debug_port) \
-    fprintf(debug_port, PACKAGE ": " cat ": " msg);
+    fprintf(debug_port, PACKAGE ": " cat ": " msg)
 
 #define FUNC_PROLOGUE_(func_name, fmt...) \
   do \
@@ -152,7 +152,7 @@ extern FILE *debug_port;
 
 #define FUNC_EPILOGUE_(ret, fmt) \
       FUNC_RETURN_(ret, fmt) \
-    } while(0);
+    } while(0)
 
 #define FUNC_RETURN_FMT(ret, fmt...) \
   FUNC_RETURN_(ret, fprintf(debug_port, fmt))

@@ -16,3 +16,12 @@ config.status
 configure
 .libs
 libfuse.la
+INSTALL
+config.guess
+config.sub
+depcomp
+fuse.pc
+install-sh
+ltmain.sh
+missing
+stamp-h1

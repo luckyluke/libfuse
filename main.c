@@ -55,7 +55,7 @@ fuse_parse_argv(int argc, char *argv[])
   int opt;
   FILE *opt_help = NULL;
 
-  while((opt = getopt(argc, argv, "d::h")) >= 0)
+  while((opt = getopt(argc, argv, "d::hs")) >= 0)
     switch(opt)
       {
       case 'd':
@@ -72,6 +72,10 @@ fuse_parse_argv(int argc, char *argv[])
 	opt_help = stdout;
 	break;
 
+      case 's':
+	libfuse_params.disable_mt = 1;
+	break;
+
       case '?':
       default:
 	opt_help = stderr;
@@ -84,6 +88,7 @@ fuse_parse_argv(int argc, char *argv[])
 	      "\nusage: %s [options]\n\n"
 	      "Options:\n"
 	      "    -d[FILENAME]        enable debug output (default=stderr)\n"
+	      "    -s                  disable multi-threaded operation\n"
 	      "    -h                  print help\n"
 	      "\n", translat_path);
 
@@ -102,7 +107,8 @@ fuse_main_compat2(int argc, char *argv[],
 {
   const char *fs_opts = fuse_parse_argv(argc, argv);
   int fd = fuse_mount(NULL, NULL);
-  return fuse_loop(fuse_new_compat2(fd, fs_opts, op));
+  return (libfuse_params.disable_mt ? fuse_loop : fuse_loop_mt)
+    (fuse_new_compat2(fd, fs_opts, op));
 }
 
 
@@ -115,7 +121,8 @@ fuse_main_real(int argc, char *argv[],
 {
   const char *fs_opts = fuse_parse_argv(argc, argv);
   int fd = fuse_mount(NULL, NULL);
-  return fuse_loop(fuse_new(fd, fs_opts, op, op_size));
+  return (libfuse_params.disable_mt ? fuse_loop : fuse_loop_mt)
+    (fuse_new(fd, fs_opts, op, op_size));
 }
 
 

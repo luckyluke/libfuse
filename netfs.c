@@ -1150,7 +1150,7 @@ fuse_dirent_helper(fuse_dirh_t handle, const char *name, int type, ino_t ino)
   /* update hdrpos pointer */
   handle->hdrpos = ((void *) handle->hdrpos) + dirent_len;
 
-  handle->count --;
+  handle->count ++;
   return 0;
 }
 

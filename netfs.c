@@ -71,7 +71,7 @@ netfs_validate_stat (struct node *node, struct iouser *cred)
 
   if(! err)
     {
-      if(! fuse_use_ino)
+      if(! libfuse_params.use_ino)
 	node->nn_stat.st_ino = node->nn->inode;
 
       node->nn_stat.st_dev = getpid();
@@ -1094,7 +1094,7 @@ fuse_dirent_helper(fuse_dirh_t handle, const char *name, int type, ino_t ino)
     handle->size -= dirent_len;
 
   /* look the inode of this element up ... */
-  if(fuse_use_ino)
+  if(libfuse_params.use_ino)
     {
       /* using the inode based api */
       if(! strcmp(name, "."))

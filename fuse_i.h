@@ -30,7 +30,6 @@
 	    __LINE__)
 
 /* pointer to the fuse_operations structure of this translator process */
-extern int fuse_use_ino;
 extern const struct fuse_operations *fuse_ops;
 extern const struct fuse_operations_compat2 *fuse_ops_compat;
 
@@ -96,6 +95,36 @@ error_t fuse_sync_filesystem(void);
 
 /* make a new node for a specific netnode */
 struct node *fuse_make_node(struct netnode *nn);
+
+
+
+/*****************************************************************************
+ *** various parameters which can be used to change libfuse's behaviour    ***
+ *****************************************************************************/
+struct _libfuse_params {
+  /* whether or not the filesystem sets the inode number */
+  unsigned use_ino             : 1;
+
+  /* whether uid,gid,umask-parameters are specified or not */
+  unsigned force_uid           : 1;
+  unsigned force_gid           : 1;
+  unsigned force_umask         : 1;
+
+  /* whether either root or other users should be allowed to use the
+   * filesystem (this overrides uid/gid/umask checking!)   */
+  unsigned allow_other         : 1;
+  unsigned allow_root          : 1;
+
+  /* whether to disable multithreading (if using fuse_main) */
+  unsigned disable_mt          : 1;
+
+  /* the uid and gid to set and which umask to apply (if bitfields are set) */
+  uid_t uid;
+  gid_t gid;
+  mode_t umask;
+};
+
+extern struct _libfuse_params libfuse_params;
 
 
 

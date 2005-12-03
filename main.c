@@ -28,8 +28,10 @@ char *netfs_server_name = PACKAGE;
 char *netfs_server_version = VERSION;
 int netfs_maxsymlinks = 12;
 
+/* libfuse filesystem configuration */
+struct _libfuse_params libfuse_params = { 0 };
+
 /* pointer to the fuse_operations structure of this translator process */
-int fuse_use_ino = 0;
 const struct fuse_operations *fuse_ops = NULL;
 const struct fuse_operations_compat2 *fuse_ops_compat = NULL;
 

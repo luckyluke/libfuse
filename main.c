@@ -42,11 +42,112 @@ FILE *debug_port = NULL;
 #define FUSE_MAGIC ((int) 0x66757365)
 
 
+
+/* Interpret a __single__ mount option 
+ * The option itself `opt' may be modified during this call.
+ */
+static int
+fuse_parse_opt(char *opt)
+{
+  char *ptrptr;
+  char *option = strtok_r(opt, "=", &ptrptr);
+  char *value = strtok_r(NULL, "=", &ptrptr);
+
+  DEBUG("parse_opt", "option `%s' => `%s'\n", option, value);
+
+  if(! strcmp(option, "use_ino"))
+    libfuse_params.use_ino = 1;
+
+  else if(! strcmp(option, "allow_other"))
+    libfuse_params.allow_other = 1;
+
+  else if(! strcmp(option, "allow_root"))
+    libfuse_params.allow_root = 1;
+
+  else if(! strcmp(option, "uid"))
+    {
+      char *endptr;
+      if(! value || (libfuse_params.uid = strtol(value, &endptr, 10), 
+		     endptr == value)) 
+	{
+	  fprintf(stderr, PACKAGE_NAME ": missing or invalid argument to "
+		  "mount option '%s': %s\n", option, value);
+	  return EINVAL;
+	}
+
+      libfuse_params.force_uid = 1;
+    }
+
+  else if(! strcmp(option, "gid"))
+    {
+      char *endptr;
+      if(! value || (libfuse_params.gid = strtol(value, &endptr, 10), 
+		     endptr == value)) 
+	{
+	  fprintf(stderr, PACKAGE_NAME ": missing or invalid argument to "
+		  "mount option '%s': %s\n", option, value);
+	  return EINVAL;
+	}
+
+      libfuse_params.force_gid = 1;
+    }
+
+  else if(! strcmp(option, "umask"))
+    {
+      char *endptr;
+      if(! value || (libfuse_params.umask = strtol(value, &endptr, 8), 
+		     endptr == value))
+	{
+	  fprintf(stderr, PACKAGE_NAME ": missing or invalid argument to "
+		  "mount option '%s': %s\n", option, value);
+	  return EINVAL;
+	}
+
+      libfuse_params.force_umask = 1;
+    }
+
+  else
+    {
+      fprintf(stderr, PACKAGE_NAME ": unsupported mount option: %s\n", option);
+      return EINVAL;
+    }
+
+  return 0;
+}
+
+/* Parse a single (or a comma-separated list) of mount options
+ * (those that are specified using `-o' on the command line for example)
+ */
+static int
+fuse_parse_opts(const char *opts)
+{
+  if(! opts) return 0;          /* ... why did'ya call us? */
+
+  char *copy = strdup(opts);    /* copy string to allow strtok calls */
+  if(! copy) return ENOMEM;
+
+  char *ptrptr, *token, *tok_me = copy;
+  while((token = strtok_r(tok_me, ",", &ptrptr)))
+    {
+      tok_me = NULL;
+      if(fuse_parse_opt(token))
+	{
+	  free(copy);
+	  return EINVAL;
+	}
+    }
+
+  free(copy);
+  return 0;
+}
+
+
+
 /* Parse the command line arguments given to fuse_main (or _compat function).
  * If --help specified, output help string and call exit.  If there are any
  * options that shall be passed to the file system itself, return them.
  */
-static const char *
+static void
 fuse_parse_argv(int argc, char *argv[])
 {
   const char *translat_path = argv[0];
@@ -55,7 +156,7 @@ fuse_parse_argv(int argc, char *argv[])
   int opt;
   FILE *opt_help = NULL;
 
-  while((opt = getopt(argc, argv, "d::hs")) >= 0)
+  while((opt = getopt(argc, argv, "d::o:hs")) >= 0)
     switch(opt)
       {
       case 'd':
@@ -66,6 +167,12 @@ fuse_parse_argv(int argc, char *argv[])
 
 	setvbuf(debug_port, NULL, _IONBF, 0);
 	fprintf(debug_port, "translator %s starting up.\n", translat_path);
+	break;
+
+      case 'o':
+	assert(optarg);
+	if(fuse_parse_opts(optarg))
+	  exit(1);
 	break;
 
       case 'h':
@@ -89,13 +196,12 @@ fuse_parse_argv(int argc, char *argv[])
 	      "Options:\n"
 	      "    -d[FILENAME]        enable debug output (default=stderr)\n"
 	      "    -s                  disable multi-threaded operation\n"
+	      "    -o opt,[opt...]     mount options\n"
 	      "    -h                  print help\n"
 	      "\n", translat_path);
 
       exit(opt_help == stdout ? 0 : 1);
     }
-
-  return 0;
 }
 
 
@@ -105,10 +211,11 @@ int
 fuse_main_compat2(int argc, char *argv[],
 		  const struct fuse_operations_compat2 *op)
 {
-  const char *fs_opts = fuse_parse_argv(argc, argv);
+  fuse_parse_argv(argc, argv);
+
   int fd = fuse_mount(NULL, NULL);
   return (libfuse_params.disable_mt ? fuse_loop : fuse_loop_mt)
-    (fuse_new_compat2(fd, fs_opts, op));
+    (fuse_new_compat2(fd, NULL, op));
 }
 
 
@@ -119,10 +226,11 @@ int
 fuse_main_real(int argc, char *argv[],
 	       const struct fuse_operations *op, size_t op_size)
 {
-  const char *fs_opts = fuse_parse_argv(argc, argv);
+  fuse_parse_argv(argc, argv);
+
   int fd = fuse_mount(NULL, NULL);
   return (libfuse_params.disable_mt ? fuse_loop : fuse_loop_mt)
-    (fuse_new(fd, fs_opts, op, op_size));
+    (fuse_new(fd, NULL, op, op_size));
 }
 
 
@@ -139,8 +247,8 @@ fuse_new_compat2(int fd, const char *opts,
   if(fd != FUSE_MAGIC)
     return NULL; 
 
-  if(opts)
-    fprintf(stderr, PACKAGE ": yet unable to parse options: %s\n", opts);
+  if(fuse_parse_opts(opts))
+    return NULL;
 
   fuse_ops_compat = op;
 
@@ -154,7 +262,7 @@ fuse_new_compat2(int fd, const char *opts,
  */
 struct fuse *
 fuse_new(int fd, const char *opts, 
-		 const struct fuse_operations *op, size_t op_size)
+	 const struct fuse_operations *op, size_t op_size)
 {
   (void) op_size; /* FIXME, see what the real Fuse library does with 
 		   * this argument */
@@ -162,8 +270,8 @@ fuse_new(int fd, const char *opts,
   if(fd != FUSE_MAGIC)
     return NULL; 
 
-  if(opts)
-    fprintf(stderr, PACKAGE ": yet unable to parse options: %s\n", opts);
+  if(fuse_parse_opts(opts))
+    return NULL;
 
   fuse_ops = op;
 
@@ -181,8 +289,8 @@ fuse_mount(const char *mountpoint, const char *opts)
   (void) mountpoint; /* we don't care for the specified mountpoint, as 
 		      * we need to be set up using settrans ... */
 
-  if(opts)
-    fprintf(stderr, PACKAGE ": yet unable to parse options: %s\n", opts);
+  if(fuse_parse_opts(opts))
+    return 0;
 
   mach_port_t bootstrap, ul_node;
 

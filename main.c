@@ -294,18 +294,10 @@ fuse_mount(const char *mountpoint, const char *opts)
 
   mach_port_t bootstrap, ul_node;
 
-  task_get_bootstrap_port(mach_task_self(), &bootstrap);
-  if(bootstrap == MACH_PORT_NULL)
-    {
-      /* no assigned bootstrap port, i.e. we got called as a
-       * common program, not using settrans
-       */
-      fprintf(stderr, "program must be started as a translator.\n");
-      return EPERM;
-    }
+  /* netfs initialization.  */
 
-  /* we have got a bootstrap port, that is, we were set up
-   * using settrans and may start with normal operation ... */
+  task_get_bootstrap_port(mach_task_self(), &bootstrap);
+
   netfs_init();
 
   ul_node = netfs_startup(bootstrap, 0);

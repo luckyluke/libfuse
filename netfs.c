@@ -187,20 +187,6 @@ netfs_attempt_create_file (struct iouser *user, struct node *dir,
    */
   err = -FUSE_OP_CALL(mknod, path, (mode & ALLPERMS) | S_IFREG, 0);
 
-  /* If available, call chown to make clear which uid/gid to assign to the
-   * new file.  Testing with 'fusexmp' I noticed that new files might be
-   * created with wrong gids -- root instead of $user in my case  :(
-   *
-   * TODO reconsider whether we should setuid/setgid the FUSE_OP_HAVE(mknod)
-   * call instead (especially if mknod is not available or returns errors)
-   */
-  if(! err && FUSE_OP_HAVE(chown)) {
-    assert(user->uids->ids[0]);
-    assert(user->gids->ids[0]);
-
-    (void)FUSE_OP_CALL(chown, path, user->uids->ids[0], user->gids->ids[0]);
-  }
-
  out:
   if(err)
     *node = NULL;
@@ -316,20 +302,6 @@ error_t netfs_attempt_mkdir (struct iouser *user, struct node *dir,
   sprintf(path, "%s/%s", dir->nn->path, name);
 
   err = -FUSE_OP_CALL(mkdir, path, mode & ALLPERMS);
-
-  /* If available, call chown to make clear which uid/gid to assign to the
-   * new file.  Testing with 'fusexmp' I noticed that new files might be
-   * created with wrong gids -- root instead of $user in my case  :(
-   *
-   * TODO reconsider whether we should setuid/setgid the FUSE_OP_HAVE(mknod)
-   * call instead (especially if mknod is not available or returns errors)
-   */
-  if(! err && FUSE_OP_HAVE(chown)) {
-    assert(user->uids->ids[0]);
-    assert(user->gids->ids[0]);
-
-    (void)FUSE_OP_CALL(chown, path, user->uids->ids[0], user->gids->ids[0]);
-  }
 
  out:
   /* we don't need to make a netnode already, lookup will be called and do
@@ -642,22 +614,7 @@ error_t netfs_attempt_mkdev (struct iouser *cred, struct node *node,
     goto out;
 
   err = -FUSE_OP_CALL(mknod, node->nn->path,
-			 type & (ALLPERMS | S_IFBLK | S_IFCHR), indexes);
-
-  /* If available, call chown to make clear which uid/gid to assign to the
-   * new file.  Testing with 'fusexmp' I noticed that new files might be
-   * created with wrong gids -- root instead of $user in my case  :(
-   *
-   * TODO reconsider whether we should setuid/setgid the FUSE_OP_HAVE(mknod)
-   * call instead (especially if mknod is not available or returns errors)
-   */
-  if(! err && FUSE_OP_HAVE(chown)) {
-    assert(cred->uids->ids[0]);
-    assert(cred->gids->ids[0]);
-
-    (void)FUSE_OP_CALL(chown, node->nn->path, cred->uids->ids[0],
-			  cred->gids->ids[0]);
-  }
+		      type & (ALLPERMS | S_IFBLK | S_IFCHR), indexes);
 
   node->nn->may_need_sync = 1;
 
@@ -807,27 +764,6 @@ error_t netfs_attempt_link (struct iouser *user, struct node *dir,
 
   /* TODO
    * create a netnode with the may_need_sync flag set!!   */
-
-  /* If available, call chown to make clear which uid/gid to assign to the
-   * new file.  Testing with 'fusexmp' I noticed that new files might be
-   * created with wrong gids -- root instead of $user in my case  :(
-   *
-   * TODO reconsider whether we should setuid/setgid the FUSE_OP_HAVE(mknod)
-   * call instead (especially if mknod is not available or returns errors)
-   */
-  /* if(! err && FUSE_OP_HAVE(chown))
-   *   {
-   *     assert(user->uids->ids[0]);
-   *     assert(user->gids->ids[0]);
-   *
-   *     (void)FUSE_OP_CALL(chown, path, user->uids->ids[0], user->gids->ids[0]);
-   *   }
-   */
-  /* FIXME
-   * This is most probably not a good idea to do here, as it would change
-   * the user and group-id of the other (linked) files as well, sharing the
-   * same inode.
-   */
 
  out:
   mutex_unlock(&dir->lock);

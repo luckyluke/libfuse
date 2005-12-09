@@ -367,7 +367,8 @@ netfs_check_open_permissions (struct iouser *user, struct node *node,
 {
   (void) newnode;
 
-  FUNC_PROLOGUE_NODE("netfs_check_open_permissions", node);
+  FUNC_PROLOGUE_FMT("netfs_check_open_permissions", "node=%s, flags=%d", 
+		    node->nn->path, flags);
   error_t err = 0;
 
   if((err = netfs_validate_stat(node, user)))
@@ -382,9 +383,14 @@ netfs_check_open_permissions (struct iouser *user, struct node *node,
   if (!err && (flags & O_EXEC))
     err = fshelp_access (&node->nn_stat, S_IEXEC, user);
 
-  /* store provided flags for later open/read/write/release operation call */
+  /* store provided flags for later open/read/write/release operation call.
+   *
+   * If O_EXEC is set, make sure O_RDONLY is set, this is, if you want to 
+   * execute a binary, only O_EXEC is set, but we want to read the binary
+   * into memory. */
   node->nn->info.flags = flags;
-
+  if(flags & O_EXEC) node->nn->info.flags |= O_RDONLY;
+  
  out:
   FUNC_EPILOGUE(err);
 }

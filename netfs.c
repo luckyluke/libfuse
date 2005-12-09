@@ -1478,10 +1478,7 @@ get_dirents_readdir(struct node *dir, int first_entry, int num_entries,
   error_t err;
   FUNC_PROLOGUE_NODE("get_dirents_readdir", dir);
 
-  if(! (fuse_ops 
-	&& fuse_ops->readdir 
-	&& fuse_ops->opendir 
-	&& fuse_ops->releasedir))
+  if(! (fuse_ops && fuse_ops->readdir))
     FUNC_RETURN(EOPNOTSUPP);
 
   fuse_dirh_t handle;
@@ -1511,7 +1508,8 @@ get_dirents_readdir(struct node *dir, int first_entry, int num_entries,
   handle->parent = dir->nn;
   handle->hdrpos = (struct dirent*) *data;
 
-  if((err = fuse_ops->opendir(dir->nn->path, &dir->nn->info)))
+  if(fuse_ops->opendir
+     && (err = fuse_ops->opendir(dir->nn->path, &dir->nn->info)))
     goto out;
 
   if((err = fuse_ops->readdir(dir->nn->path, handle, 
@@ -1522,7 +1520,8 @@ get_dirents_readdir(struct node *dir, int first_entry, int num_entries,
       goto out;
     }
 
-  if((err = fuse_ops->releasedir(dir->nn->path, &dir->nn->info)))
+  if(fuse_ops->releasedir
+     && (err = fuse_ops->releasedir(dir->nn->path, &dir->nn->info)))
     goto out;
 
   *data_len -= handle->size; /* subtract number of bytes left in the

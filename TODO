@@ -70,4 +70,9 @@ We're supposed to define netfs_make_user().
 
 * readdir()
 
-FUSE's readdir() needs to be supported in netfs_get_dirents().
+  FUSE's readdir() needs to be supported in netfs_get_dirents().
+
+** this was introduced by an api change with version 2.3
+
+   ... and should finally be supported. But still needs some more
+   testing.  I've just run the fusexmp_fh example so far. 

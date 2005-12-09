@@ -382,6 +382,9 @@ netfs_check_open_permissions (struct iouser *user, struct node *node,
   if (!err && (flags & O_EXEC))
     err = fshelp_access (&node->nn_stat, S_IEXEC, user);
 
+  /* store provided flags for later open/read/write/release operation call */
+  node->nn->info.flags = flags;
+
  out:
   FUNC_EPILOGUE(err);
 }
@@ -1033,9 +1036,26 @@ error_t netfs_attempt_write (struct iouser *cred, struct node *node,
 
   node->nn->info.writepage = 0; /* cannot distinct on the Hurd :( */
 
+  if(fuse_ops && fuse_ops->open)
+    if((err = fuse_ops->open(node->nn->path, &node->nn->info)))
+      goto out;
+
   int sz = fuse_ops ? 
     (fuse_ops->write(node->nn->path, data, *len, offset, &node->nn->info)) : 
     (fuse_ops_compat->write(node->nn->path, data, *len, offset));
+
+  /* FIXME: open, flush and release handling probably should be changed
+   * completely, I mean, we probably should do fuse_ops->open in 
+   * the netfs_check_open_permissions function and leave it open
+   * until the node is destroyed.
+   *
+   * This way we wouldn't be able to report any errors back.
+   */
+  if(sz >= 0 && fuse_ops && fuse_ops->flush)
+    err = fuse_ops->flush(node->nn->path, &node->nn->info);
+
+  if(fuse_ops && fuse_ops->open && fuse_ops->release)
+    fuse_ops->release(node->nn->path, &node->nn->info);
      
   if(sz < 0)
     err = -sz;
@@ -1111,10 +1131,26 @@ error_t netfs_attempt_read (struct iouser *cred, struct node *node,
       goto out;
     }
 
+  if(fuse_ops && fuse_ops->open)
+    if((err = fuse_ops->open(node->nn->path, &node->nn->info)))
+      goto out;
 
   int sz = fuse_ops ? 
     (fuse_ops->read(node->nn->path, data, *len, offset, &node->nn->info)) : 
     (fuse_ops_compat->read(node->nn->path, data, *len, offset));
+
+  /* FIXME: open, flush and release handling probably should be changed
+   * completely, I mean, we probably should do fuse_ops->open in 
+   * the netfs_check_open_permissions function and leave it open
+   * until the node is destroyed.
+   *
+   * This way we wouldn't be able to report any errors back.
+   */
+  if(sz >= 0 && fuse_ops && fuse_ops->flush)
+    err = fuse_ops->flush(node->nn->path, &node->nn->info);
+
+  if(fuse_ops && fuse_ops->open && fuse_ops->release)
+    fuse_ops->release(node->nn->path, &node->nn->info);
 
   if(sz < 0)
     err = -sz;

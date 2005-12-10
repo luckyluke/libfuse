@@ -58,6 +58,9 @@ fuse_parse_opt(char *opt)
   if(! strcmp(option, "use_ino"))
     libfuse_params.use_ino = 1;
 
+  else if(! strcmp(option, "default_permissions"))
+    libfuse_params.deflt_perms = 1;
+
   else if(! strcmp(option, "allow_other"))
     libfuse_params.allow_other = 1;
 

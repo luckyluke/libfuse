@@ -139,7 +139,8 @@ error_t netfs_attempt_readlink (struct iouser *user, struct node *node,
   error_t err;
 
   if((err = netfs_validate_stat(node, user))
-     || (err = fshelp_access(&node->nn_stat, S_IREAD, user)))
+     || (libfuse_params.deflt_perms
+	 && (err = fshelp_access(&node->nn_stat, S_IREAD, user))))
     goto out;
 
   if(FUSE_OP_HAVE(readlink))
@@ -165,7 +166,8 @@ netfs_attempt_create_file (struct iouser *user, struct node *dir,
   char *path = NULL;
 
   if((err = netfs_validate_stat(dir, user))
-     || (err = fshelp_checkdirmod(&dir->nn_stat, NULL, user)))
+     || (libfuse_params.deflt_perms
+	 && (err = fshelp_checkdirmod(&dir->nn_stat, NULL, user))))
     goto out;
 
   if(! FUSE_OP_HAVE(mknod))
@@ -228,7 +230,8 @@ error_t netfs_attempt_chown (struct iouser *cred, struct node *node,
   error_t err;
 
   if((err = netfs_validate_stat(node, cred))
-     || (err = fshelp_isowner(&node->nn_stat, cred)))
+     || (libfuse_params.deflt_perms
+	 && (err = fshelp_isowner(&node->nn_stat, cred))))
     goto out;
 
   if(! FUSE_OP_HAVE(chown))
@@ -284,7 +287,8 @@ error_t netfs_attempt_mkdir (struct iouser *user, struct node *dir,
   char *path = NULL;
 
   if((err = netfs_validate_stat(dir, user))
-     || (err = fshelp_checkdirmod(&dir->nn_stat, NULL, user)))
+     || (libfuse_params.deflt_perms
+	 && (err = fshelp_checkdirmod(&dir->nn_stat, NULL, user))))
     goto out;
 
   if(! FUSE_OP_HAVE(mkdir))
@@ -346,23 +350,29 @@ netfs_check_open_permissions (struct iouser *user, struct node *node,
   if((err = netfs_validate_stat(node, user)))
     goto out;
 
-  if (flags & O_READ)
-    err = fshelp_access (&node->nn_stat, S_IREAD, user);
+  if(libfuse_params.deflt_perms)
+    {
+      if (flags & O_READ)
+	err = fshelp_access (&node->nn_stat, S_IREAD, user);
       
-  if (!err && (flags & O_WRITE))
-    err = fshelp_access (&node->nn_stat, S_IWRITE, user);
+      if (!err && (flags & O_WRITE))
+	err = fshelp_access (&node->nn_stat, S_IWRITE, user);
       
-  if (!err && (flags & O_EXEC))
-    err = fshelp_access (&node->nn_stat, S_IEXEC, user);
+      if (!err && (flags & O_EXEC))
+	err = fshelp_access (&node->nn_stat, S_IEXEC, user);
+    }
 
   /* store provided flags for later open/read/write/release operation call.
    *
    * If O_EXEC is set, make sure O_RDONLY is set, this is, if you want to 
    * execute a binary, only O_EXEC is set, but we want to read the binary
    * into memory. */
-  node->nn->info.flags = flags;
-  if(flags & O_EXEC) node->nn->info.flags |= O_RDONLY;
-  
+  if(! err) 
+    {
+      node->nn->info.flags = flags;
+      if(flags & O_EXEC) node->nn->info.flags |= O_RDONLY;
+    }
+
  out:
   FUNC_EPILOGUE(err);
 }
@@ -381,7 +391,8 @@ error_t netfs_attempt_chmod (struct iouser *cred, struct node *node,
   error_t err;
 
   if((err = netfs_validate_stat(node, cred))
-     || (err = fshelp_isowner(&node->nn_stat, cred)))
+     || (libfuse_params.deflt_perms
+	 && (err = fshelp_isowner(&node->nn_stat, cred))))
     goto out;
 
   if(! FUSE_OP_HAVE(chmod))
@@ -409,7 +420,8 @@ error_t netfs_attempt_mkfile (struct iouser *user, struct node *dir,
   char name[20];
   static int num = 0;
 
-  if(! (err = netfs_validate_stat(dir, user)))
+  if(! (err = netfs_validate_stat(dir, user))
+     && libfuse_params.deflt_perms)
     err = fshelp_checkdirmod(&dir->nn_stat, NULL, user);
 
   if(! err && ! FUSE_OP_HAVE(mknod))
@@ -488,7 +500,8 @@ netfs_attempt_sync (struct iouser *cred, struct node *node, int wait)
   error_t err;
 
   if((err = netfs_validate_stat(node, cred))
-     || (err = fshelp_access(&node->nn_stat, S_IWRITE, cred)))
+     || (libfuse_params.deflt_perms
+	 && (err = fshelp_access(&node->nn_stat, S_IWRITE, cred))))
     goto out;
 
   if(! FUSE_OP_HAVE(fsync))
@@ -533,7 +546,8 @@ error_t netfs_attempt_unlink (struct iouser *user, struct node *dir,
 
   if((err = netfs_validate_stat(dir, user))
      || (err = netfs_validate_stat(node, user))
-     || (err = fshelp_checkdirmod(&dir->nn_stat, &node->nn_stat, user)))
+     || (libfuse_params.deflt_perms 
+	 && (err = fshelp_checkdirmod(&dir->nn_stat, &node->nn_stat, user))))
     goto out;
 
   if(FUSE_OP_HAVE(unlink))
@@ -561,7 +575,8 @@ error_t netfs_attempt_set_size (struct iouser *cred, struct node *node,
   error_t err;
 
   if((err = netfs_validate_stat(node, cred))
-     || (err = fshelp_access(&node->nn_stat, S_IWRITE, cred)))
+     || (libfuse_params.deflt_perms
+	 && (err = fshelp_access(&node->nn_stat, S_IWRITE, cred))))
     goto out;
 
   if(FUSE_OP_HAVE(truncate))
@@ -588,7 +603,8 @@ error_t netfs_attempt_mkdev (struct iouser *cred, struct node *node,
    * since we're going to unlink files?
    */
   if((err = netfs_validate_stat(node, cred))
-     || (err = fshelp_access(&node->nn_stat, S_IWRITE, cred)))
+     || (libfuse_params.deflt_perms
+	 && (err = fshelp_access(&node->nn_stat, S_IWRITE, cred))))
     goto out;
 
   /* check whether the operations are available at all */
@@ -636,15 +652,24 @@ netfs_report_access (struct iouser *cred, struct node *node, int *types)
   if((err = netfs_validate_stat(node, cred)))
     goto out;
   
-  if (fshelp_access (&node->nn_stat, S_IREAD, cred) == 0)
-    *types |= O_READ;
-  
-  if (fshelp_access (&node->nn_stat, S_IWRITE, cred) == 0)
-    *types |= O_WRITE;
+  if(libfuse_params.deflt_perms) 
+    {
+      if(fshelp_access (&node->nn_stat, S_IREAD, cred) == 0)
+	*types |= O_READ;
+      
+      if(fshelp_access (&node->nn_stat, S_IWRITE, cred) == 0)
+	*types |= O_WRITE;
 
-  if (fshelp_access (&node->nn_stat, S_IEXEC, cred) == 0)
-    *types |= O_EXEC;
-  
+      if(fshelp_access (&node->nn_stat, S_IEXEC, cred) == 0)
+	*types |= O_EXEC;
+    }
+  else
+    /* check_allow_root_or_other allowed to get here, this is, we're
+     * allowed to access the file. Default permissions checking is disabled,
+     * thus, grant access
+     */
+    *types |= O_READ | O_WRITE | O_EXEC;
+
  out:
   FUNC_EPILOGUE(0);
 }
@@ -663,8 +688,9 @@ error_t netfs_attempt_lookup (struct iouser *user, struct node *dir,
   error_t err;
 
   if((err = netfs_validate_stat(dir, user))
-     || (err = fshelp_access(&dir->nn_stat, S_IREAD, user))
-     || (err = fshelp_access(&dir->nn_stat, S_IEXEC, user)))
+     || (libfuse_params.deflt_perms
+	 && ((err = fshelp_access(&dir->nn_stat, S_IREAD, user))
+	     || (err = fshelp_access(&dir->nn_stat, S_IEXEC, user)))))
     goto out;
   else
     err = ENOENT; /* default to return ENOENT */
@@ -745,7 +771,8 @@ error_t netfs_attempt_link (struct iouser *user, struct node *dir,
   mutex_lock(&dir->lock);
 
   if((err = netfs_validate_stat(node, user))
-     || (err = fshelp_checkdirmod(&dir->nn_stat, &node->nn_stat, user)))
+     || (libfuse_params.deflt_perms
+	 && (err = fshelp_checkdirmod(&dir->nn_stat, &node->nn_stat, user))))
     goto out;
 
   if(! FUSE_OP_HAVE(link)) {
@@ -794,7 +821,8 @@ error_t netfs_attempt_rmdir (struct iouser *user,
     goto out_nounlock; 
 
   if((err = netfs_validate_stat(node, user))
-     || (err = fshelp_checkdirmod(&dir->nn_stat, &node->nn_stat, user)))
+     || (libfuse_params.deflt_perms
+	 && (err = fshelp_checkdirmod(&dir->nn_stat, &node->nn_stat, user))))
     goto out;
 
   if(FUSE_OP_HAVE(rmdir))
@@ -843,7 +871,8 @@ error_t netfs_attempt_mksymlink (struct iouser *cred, struct node *node,
    * since we're going to unlink files?
    */
   if((err = netfs_validate_stat(node, cred))
-     || (err = fshelp_access(&node->nn_stat, S_IWRITE, cred)))
+     || (libfuse_params.deflt_perms
+	 && (err = fshelp_access(&node->nn_stat, S_IWRITE, cred))))
     goto out;
 
   /* we need to unlink the existing node, therefore, if unlink is not
@@ -909,11 +938,14 @@ error_t netfs_attempt_rename (struct iouser *user, struct node *fromdir,
   mutex_lock(&todir->lock);
 
   if((err = netfs_validate_stat(fromdir, user))
-     || fshelp_checkdirmod(&fromdir->nn_stat, &fromnode->nn_stat, user))
+     || (libfuse_params.deflt_perms
+	 && (err = fshelp_checkdirmod(&fromdir->nn_stat,
+				      &fromnode->nn_stat, user))))
     goto out;
 
   if((err = netfs_validate_stat(todir, user))
-     || fshelp_checkdirmod(&todir->nn_stat, NULL, user))
+     || (libfuse_params.deflt_perms
+	 && (err = fshelp_checkdirmod(&todir->nn_stat, NULL, user))))
     goto out;
 
   if(! FUSE_OP_HAVE(rename))
@@ -927,7 +959,7 @@ error_t netfs_attempt_rename (struct iouser *user, struct node *fromdir,
   if(! excl && FUSE_OP_HAVE(unlink))
     /* EXCL is not set, therefore we may remove the target, i.e. call
      * unlink on it.  Ignoring return value, as it's mostly not interesting,
-     * since the file does not exist in most case
+     * since the file does not exist in most cases
      */
     (void) FUSE_OP_CALL(unlink, topath);
 
@@ -967,7 +999,8 @@ error_t netfs_attempt_write (struct iouser *cred, struct node *node,
   error_t err;
 
   if((err = netfs_validate_stat(node, cred))
-     || (err = fshelp_access(&node->nn_stat, S_IWRITE, cred)))
+     || (libfuse_params.deflt_perms
+	 && (err = fshelp_access(&node->nn_stat, S_IWRITE, cred))))
     goto out;
 
   if(! FUSE_OP_HAVE(write)) 
@@ -1021,7 +1054,8 @@ netfs_attempt_utimes (struct iouser *cred, struct node *node,
 
   /* test whether operation is supported and permission are sufficient */
   if((err = netfs_validate_stat(node, cred))
-     || (err = fshelp_isowner(&node->nn_stat, cred)))
+     || (libfuse_params.deflt_perms
+	 && (err = fshelp_isowner(&node->nn_stat, cred))))
     goto out;
 
   if(! FUSE_OP_HAVE(utime)) 
@@ -1064,7 +1098,8 @@ error_t netfs_attempt_read (struct iouser *cred, struct node *node,
   error_t err;
 
   if((err = netfs_validate_stat(node, cred))
-     || (err = fshelp_access(&node->nn_stat, S_IREAD, cred)))
+     || (libfuse_params.deflt_perms
+	 && (err = fshelp_access(&node->nn_stat, S_IREAD, cred))))
     goto out;
 
   if(! FUSE_OP_HAVE(read))
@@ -1485,8 +1520,9 @@ netfs_get_dirents (struct iouser *cred, struct node *dir,
   error_t err;
 
   if((err = netfs_validate_stat(dir, cred))
-     || (err = fshelp_access(&dir->nn_stat, S_IREAD, cred))
-     || (err = fshelp_access(&dir->nn_stat, S_IEXEC, cred)))
+     || (libfuse_params.deflt_perms
+	 && ((err = fshelp_access(&dir->nn_stat, S_IREAD, cred))
+	     || (err = fshelp_access(&dir->nn_stat, S_IEXEC, cred)))))
     goto out;
 
 

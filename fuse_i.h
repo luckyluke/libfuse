@@ -112,6 +112,7 @@ struct _libfuse_params {
 
   /* whether either root or other users should be allowed to use the
    * filesystem (this overrides uid/gid/umask checking!)   */
+  unsigned deflt_perms         : 1;
   unsigned allow_other         : 1;
   unsigned allow_root          : 1;
 

@@ -195,13 +195,27 @@ fuse_parse_argv(int argc, char *argv[])
   if(opt_help)
     {
       fprintf(opt_help,
-	      "\nusage: %s [options]\n\n"
-	      "Options:\n"
-	      "    -d[FILENAME]        enable debug output (default=stderr)\n"
-	      "    -s                  disable multi-threaded operation\n"
-	      "    -o opt,[opt...]     mount options\n"
-	      "    -h                  print help\n"
-	      "\n", translat_path);
+	      "usage: %s [FUSE options]\n\n"
+	      "FUSE Options:\n"
+	      "    -d[FILENAME]           "
+	      "enable debug output (default=stderr)\n"
+	      "    -s                     disable multi-threaded operation\n"
+	      /* "    -r                     "
+	       * "mount read only (equivalent to '-o ro')\n" */
+	      "    -o opt,[opt...]        mount options\n"
+	      "    -h                     print help\n"
+	      "\n"
+	      "Mount options:\n"
+	      "    default_permissions    enable permission checking\n"
+	      "    allow_other            allow access to other users\n"
+	      "    allow_root             allow access to root\n"
+	      "    use_ino                let filesystem set inode numbers\n"
+	      /* "    readdir_ino            "
+	       * "try to fill in d_ino in readdir\n" */
+	      "    umask                  set file permissions (octal)\n"
+	      "    uid                    set file owner\n"
+	      "    gid                    set file group\n",
+	      translat_path);
 
       exit(opt_help == stdout ? 0 : 1);
     }

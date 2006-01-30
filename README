@@ -1,25 +1,58 @@
-libfuse - imitation of Linux's libfuse for the Hurd
+		-*- mode: outline -*-
 
-
-W H A T   I S   I T ? 
+* General Information
   libfuse is a library intended for the GNU Hurd trying to imitate the
   API of the fuse library, available from http://fuse.sourceforge.net, for
   Linux. It's based on Hurd's libnetfs and tries to bring all the fuse based
-  virtual filesystems over to the Hurd. However this results in being quite
-  a hack (at least for the time being)
-  
+  virtual filesystems over to the Hurd.
 
-H O W   T O   U S E   I T ? 
-  simply install libfuse, which will copy a libfuse.{so,la,a} to your
-  /local/lib directory. Then simply try to build the fuse-based translator
-  as you'd like on Linux. In case it works, please tell - if not, you might
-  want to tell as well :-)
+** Fuse Low-Level API
+   The low-level API will not be supported by libfuse/Hurd for the
+   time being. This is simply because it is to specific to the Linux
+   kernel and (besides that) it is not farly used now.
 
+   In case the latter should change in the future, we might want to
+   re-think about that issue though.
+
+   This is, you will not succeed in compiling the hello_ll.c example
+   from the example-24 directory.
+
+* Dependencies
+  Actually none, besides libnetfs. However you should have installed
+  that anyways (maybe missing just the header files).
+
+* Installation
+  ./configure
+  make
+  make install
+
+  For more details see the INSTALL file in this directory.
  
-Have fun with libfuse
-  ... and let us hear any suggestions, send patches, etc.
+* How To Use
+  Translators linked against libfuse/Hurd don't work exactly like on
+  the Linux operating system. To be more precise: you need to install
+  them using settrans.
+
+  Some filesystems check for the availibility of a command line
+  argument, which they want to pass to libfuse, and simply fail, if
+  you don't supply it. This is because on Linux you call the
+  translator as a program as such and specify the mount-point as the
+  first argument. 
+
+  If the fuse-based translator insists on that argument, just provide
+  any useless information (maybe the correct path). This one will not
+  be treated (at least by libfuse). 
+
+  The filesystem will be put on the node you provide to the settrans
+  command. Anything else is not of any interest.
+
+  Filesystems that try to export more than one filesystem (I don't
+  know of any example, sorry, but these are generally supported by
+  Linux's FUSE) will fail on the Hurd. This is because of the settrans
+  thing. 
+
+* Bug Reports
   You can contact us at <hurdextras-hackers@nongnu.org>.
 
 
-Stefan Siegl <ssiegl@gmx.de>
-$Id: README,v 1.3 2005/11/15 23:43:05 tschwinge Exp $
+$Id: README,v 1.4 2006/01/30 22:33:57 stesie Exp $

@@ -5,7 +5,7 @@
 
 AC_PREREQ(2.59)
 AC_INIT(libfuse, 0.1, hurdextras-hackers@nongnu.org)
-AC_REVISION($Revision: 1.6 $)
+AC_REVISION($Revision: 1.7 $)
 AC_CONFIG_SRCDIR(src/main.c)
 AM_CONFIG_HEADER(config.h)
 
@@ -41,5 +41,8 @@ CFLAGS="$CFLAGS -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -Wall -W -ggdb"
 
 AC_CONFIG_FILES([fuse.pc Makefile]
 		[include/Makefile src/Makefile]
-		[example/Makefile example-22/Makefile example-23/Makefile])
+		[example/Makefile 
+		 example-22/Makefile 
+		 example-23/Makefile
+		 example-24/Makefile])
 AC_OUTPUT

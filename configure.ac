@@ -1,12 +1,12 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 #
-# Copyright (C) 2005 by Stefan Siegl <ssiegl@gmx.de>, Germany
+# Copyright (C) 2005,2006 by Stefan Siegl <stesie@brokenpipe.de>, Germany
 
 AC_PREREQ(2.59)
 AC_INIT(libfuse, 0.1, hurdextras-hackers@nongnu.org)
-AC_REVISION($Revision: 1.5 $)
-AC_CONFIG_SRCDIR(main.c)
+AC_REVISION($Revision: 1.6 $)
+AC_CONFIG_SRCDIR(src/main.c)
 AM_CONFIG_HEADER(config.h)
 
 # Initialize automake
@@ -40,5 +40,6 @@ CFLAGS="$CFLAGS -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -Wall -W -ggdb"
 # Checks for library functions.
 
 AC_CONFIG_FILES([fuse.pc Makefile]
+		[include/Makefile src/Makefile]
 		[example/Makefile example-22/Makefile example-23/Makefile])
 AC_OUTPUT

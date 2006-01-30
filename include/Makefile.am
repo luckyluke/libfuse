@@ -3,9 +3,9 @@
 #
 # Copyright (C) 2005,2006 Stefan Siegl <stesie@brokenpipe.de>, Germany
 
-SUBDIRS = include src
+SUBDIRS = 
 
-pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = fuse.pc
-
-$(pkgconfig_DATA): config.status
+fuseincludedir=$(includedir)/fuse
+fuseinclude_HEADERS = \
+	fuse.h \
+	fuse_compat.h

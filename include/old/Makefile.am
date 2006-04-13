@@ -3,9 +3,8 @@
 #
 # Copyright (C) 2005,2006 Stefan Siegl <stesie@brokenpipe.de>, Germany
 
-SUBDIRS = old
+SUBDIRS = 
 
-fuseincludedir=$(includedir)/fuse
+fuseincludedir=$(includedir)
 fuseinclude_HEADERS = \
-	fuse.h \
-	fuse_compat.h
+	fuse.h

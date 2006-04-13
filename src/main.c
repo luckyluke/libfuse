@@ -1,7 +1,7 @@
 /**********************************************************
  * main.c
  *
- * Copyright (C) 2004, 2005 by Stefan Siegl <ssiegl@gmx.de>, Germany
+ * Copyright (C) 2004,2005,2006 by Stefan Siegl <stesie@brokenpipe.de>, Germany
  * 
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Publice License,
@@ -352,12 +352,84 @@ fuse_loop(struct fuse *f)
 }
 
 
-int
-fuse_loop_mt(struct fuse *f) 
+struct fuse_cmd {
+  mach_msg_header_t *inp;
+  mach_msg_header_t *outp;
+  int return_value;
+};
+
+static fuse_processor_t fuse_proc = NULL;
+static void *fuse_proc_data;
+
+static int
+fuse_demuxer(mach_msg_header_t *inp,
+	     mach_msg_header_t *outp)
 {
+  struct fuse_cmd cmd;
+
+  cmd.inp = inp;
+  cmd.outp = outp;
+
+  fuse_proc((void *) FUSE_MAGIC, &cmd, fuse_proc_data);
+
+  return cmd.return_value;
+}
+
+void
+fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
+{
+  if(f != ((void *) FUSE_MAGIC)) 
+    {
+      cmd->return_value = -1; 
+      return;
+    }
+  
+  int netfs_fs_server (mach_msg_header_t *, mach_msg_header_t *);
+  int netfs_io_server (mach_msg_header_t *, mach_msg_header_t *);
+  int netfs_fsys_server (mach_msg_header_t *, mach_msg_header_t *);
+  int netfs_ifsock_server (mach_msg_header_t *, mach_msg_header_t *);
+
+  mach_msg_header_t *inp = cmd->inp;
+  mach_msg_header_t *outp = cmd->outp;
+
+  cmd->return_value = (netfs_io_server (inp, outp)
+		       || netfs_fs_server (inp, outp)
+		       || ports_notify_server (inp, outp)
+		       || netfs_fsys_server (inp, outp)
+		       || ports_interrupt_server (inp, outp)
+		       || netfs_ifsock_server (inp, outp));
+}
+
+
+int
+fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data)
+{
+  static int thread_timeout = 1000 * 60 * 2;  /* two minutes */
+  static int server_timeout = 1000 * 60 * 10; /* ten minutes, just like in
+					       * init-loop.c of libnetfs */
+
   if(f != ((void *) FUSE_MAGIC))
     return -1; 
   
-  netfs_server_loop();
+  /* copy the provided arguments to global variables to make them available
+   * to fuse_demuxer ... */
+  fuse_proc = proc;
+  fuse_proc_data = data;
+
+  ports_manage_port_operations_multithread(netfs_port_bucket,
+					   fuse_demuxer,
+					   thread_timeout,
+					   server_timeout, 
+					   0);
   return 0;
+}
+
+
+int
+fuse_loop_mt(struct fuse *f) 
+{
+  if (f == NULL)
+    return -1;
+
+  return fuse_loop_mt_proc(f, (fuse_processor_t) fuse_process_cmd, NULL);
 }

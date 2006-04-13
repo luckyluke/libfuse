@@ -17,7 +17,7 @@
 #ifdef FUSE_USE_VERSION
 #  include "fuse.h"
 #else
-#  define FUSE_USE_VERSION 23
+#  define FUSE_USE_VERSION 25
 #  include "fuse.h"
 #  include "fuse_compat.h"
 #endif
@@ -30,13 +30,15 @@
 	    __LINE__)
 
 /* pointer to the fuse_operations structure of this translator process */
-extern const struct fuse_operations *fuse_ops;
-extern const struct fuse_operations_compat2 *fuse_ops_compat;
+extern const struct fuse_operations_compat22 *fuse_ops_compat22;
+extern const struct fuse_operations_compat2 *fuse_ops_compat2;
 
-#define FUSE_OP_HAVE(a) ((fuse_ops) ? \
-                          (fuse_ops->a != NULL) : (fuse_ops_compat->a != NULL))
-#define FUSE_OP_CALL(a,b...) ((fuse_ops) ? \
-                               (fuse_ops->a(b)) : (fuse_ops_compat->a(b)))
+#define FUSE_OP_HAVE(a) ((fuse_ops_compat22) ? \
+                          (fuse_ops_compat22->a != NULL) : \
+			  (fuse_ops_compat2->a != NULL))
+#define FUSE_OP_CALL(a,b...) ((fuse_ops_compat22) ? \
+                               (fuse_ops_compat22->a(b)) : \
+                               (fuse_ops_compat2->a(b)))
 
 /*****************************************************************************
  *** netnodes (in memory representation of libfuse's files or directories) ***
@@ -53,7 +55,9 @@ struct netnode {
 
   /* information about the opened file
    */
-  struct fuse_file_info info;
+  union {
+    struct fuse_file_info_compat22 compat22;
+  } info;
 
   /* pointer to our parent's netnode, if any */
   struct netnode *parent;

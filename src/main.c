@@ -32,8 +32,8 @@ int netfs_maxsymlinks = 12;
 struct _libfuse_params libfuse_params = { 0 };
 
 /* pointer to the fuse_operations structure of this translator process */
-const struct fuse_operations *fuse_ops = NULL;
-const struct fuse_operations_compat2 *fuse_ops_compat = NULL;
+const struct fuse_operations_compat22 *fuse_ops_compat22 = NULL;
+const struct fuse_operations_compat2 *fuse_ops_compat2 = NULL;
 
 /* the port where to write out debug messages to, NULL to omit these */
 FILE *debug_port = NULL;
@@ -230,7 +230,7 @@ fuse_main_compat2(int argc, char *argv[],
 {
   fuse_parse_argv(argc, argv);
 
-  int fd = fuse_mount(NULL, NULL);
+  int fd = fuse_mount_compat22(NULL, NULL);
   return (libfuse_params.disable_mt ? fuse_loop : fuse_loop_mt)
     (fuse_new_compat2(fd, NULL, op));
 }
@@ -240,16 +240,24 @@ fuse_main_compat2(int argc, char *argv[],
 /* Main function of FUSE. 
  * named fuse_main_real, since originial fuse.h defines a macro renaming it */
 int 
-fuse_main_real(int argc, char *argv[],
-	       const struct fuse_operations *op, size_t op_size)
+fuse_main_real_compat22(int argc, char *argv[],
+			const struct fuse_operations_compat22 *op,
+			size_t op_size)
 {
   fuse_parse_argv(argc, argv);
 
-  int fd = fuse_mount(NULL, NULL);
+  int fd = fuse_mount_compat22(NULL, NULL);
   return (libfuse_params.disable_mt ? fuse_loop : fuse_loop_mt)
-    (fuse_new(fd, NULL, op, op_size));
+    (fuse_new_compat22(fd, NULL, op, op_size));
 }
 
+
+int
+fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
+	       size_t op_size)
+{
+  assert(0);
+}
 
 
 /* Create a new FUSE filesystem, actually there's nothing for us to do 
@@ -267,7 +275,7 @@ fuse_new_compat2(int fd, const char *opts,
   if(fuse_parse_opts(opts))
     return NULL;
 
-  fuse_ops_compat = op;
+  fuse_ops_compat2 = op;
 
   return (void *) FUSE_MAGIC; /* we don't have a fuse structure, sorry. */
 }
@@ -275,11 +283,22 @@ fuse_new_compat2(int fd, const char *opts,
 
 
 /* Create a new FUSE filesystem, actually there's nothing for us to do 
+ * on the Hurd. Hmm.
+ */
+struct fuse *
+fuse_new(int fd, struct fuse_args *args,
+	 const struct fuse_operations *op, size_t op_size)
+{
+  assert(0);
+}
+
+
+/* Create a new FUSE filesystem, actually there's nothing for us to do 
  * on the Hurd.
  */
 struct fuse *
-fuse_new(int fd, const char *opts, 
-	 const struct fuse_operations *op, size_t op_size)
+fuse_new_compat22(int fd, const char *opts, 
+		  const struct fuse_operations_compat22 *op, size_t op_size)
 {
   (void) op_size; /* FIXME, see what the real Fuse library does with 
 		   * this argument */
@@ -290,18 +309,24 @@ fuse_new(int fd, const char *opts,
   if(fuse_parse_opts(opts))
     return NULL;
 
-  fuse_ops = op;
+  fuse_ops_compat22 = op;
 
   return (void *) FUSE_MAGIC; /* we don't have a fuse structure, sorry. */
 }
-
 
 
 /* Create a new mountpoint for our fuse filesystem, i.e. do the netfs
  * initialization stuff ...
  */
 int 
-fuse_mount(const char *mountpoint, const char *opts)
+fuse_mount(const char *mountpoint, struct fuse_args *args)
+{
+  assert(0);
+}
+
+
+int 
+fuse_mount_compat22(const char *mountpoint, const char *opts)
 {
   (void) mountpoint; /* we don't care for the specified mountpoint, as 
 		      * we need to be set up using settrans ... */

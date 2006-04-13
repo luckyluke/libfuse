@@ -152,9 +152,10 @@ fuse_sync_filesystem(void)
 	  {
 	    if(he->nn->may_need_sync)
 	      {
-		err = -(fuse_ops ?
-			fuse_ops->fsync(he->nn->path, 0, &he->nn->info) :
-			fuse_ops_compat->fsync(he->nn->path, 0));
+		err = -(fuse_ops_compat22 ?
+			fuse_ops_compat22->fsync(he->nn->path, 0,
+						 &he->nn->info.compat22) :
+			fuse_ops_compat2->fsync(he->nn->path, 0));
 		
 		if(err)
 		  goto out;

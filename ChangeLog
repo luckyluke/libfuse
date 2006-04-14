@@ -2,4 +2,4 @@
 # ChangeLog is more or less available through CVS revision history
 # there is no separate file telling what was changed line by line ...
 
-exec lynx "http://savannah.nongnu.org/cgi-bin/viewcvs.cgi/hurdextras/libfuse/"
+exec lynx "http://cvs.savannah.nongnu.org/viewcvs/libfuse/?root=hurdextras"

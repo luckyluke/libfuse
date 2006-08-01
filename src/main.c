@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <error.h>
 #include <hurd/netfs.h>
+#include <hurd.h>
 
 #include "fuse_i.h"
 #include "fuse.h"
@@ -192,6 +193,12 @@ fuse_parse_argv(int argc, char *argv[])
 	break;
       }
 
+  if(argc - optind > 1) 
+    {
+      opt_help = stderr;
+      fprintf(opt_help, "%s: too many command line arguments.\n", argv[0]);
+    }
+
   if(opt_help)
     {
       fprintf(opt_help,
@@ -219,6 +226,10 @@ fuse_parse_argv(int argc, char *argv[])
 
       exit(opt_help == stdout ? 0 : 1);
     }
+
+  /* chop off the consumed args */
+  argv[0] = argv[optind];
+  argv[1] = NULL;
 }
 
 
@@ -230,7 +241,7 @@ fuse_main_compat2(int argc, char *argv[],
 {
   fuse_parse_argv(argc, argv);
 
-  int fd = fuse_mount_compat22(NULL, NULL);
+  int fd = fuse_mount_compat22(argv[0], NULL);
   return (libfuse_params.disable_mt ? fuse_loop : fuse_loop_mt)
     (fuse_new_compat2(fd, NULL, op));
 }
@@ -246,7 +257,7 @@ fuse_main_real_compat22(int argc, char *argv[],
 {
   fuse_parse_argv(argc, argv);
 
-  int fd = fuse_mount_compat22(NULL, NULL);
+  int fd = fuse_mount_compat22(argv[0], NULL);
   return (libfuse_params.disable_mt ? fuse_loop : fuse_loop_mt)
     (fuse_new_compat22(fd, NULL, op, op_size));
 }
@@ -328,21 +339,59 @@ fuse_mount(const char *mountpoint, struct fuse_args *args)
 int 
 fuse_mount_compat22(const char *mountpoint, const char *opts)
 {
-  (void) mountpoint; /* we don't care for the specified mountpoint, as 
-		      * we need to be set up using settrans ... */
-
   if(fuse_parse_opts(opts))
     return 0;
 
   mach_port_t bootstrap, ul_node;
-
-  /* netfs initialization.  */
-
   task_get_bootstrap_port(mach_task_self(), &bootstrap);
 
-  netfs_init();
+  if(! mountpoint || bootstrap)
+    {
+      netfs_init();
+      ul_node = netfs_startup(bootstrap, 0);
+    }
+  else 
+    {
+      /* 
+       * we don't have a bootstrap port, i.e. we were not started using 
+       * settrans, but know the mountpoint, therefore try to become
+       * a translator the hard way ...
+       */
+      ul_node = file_name_lookup(mountpoint, 0, 0);
 
-  ul_node = netfs_startup(bootstrap, 0);
+      if(ul_node == MACH_PORT_NULL)
+	error(10, 0, "Unable to access underlying node");
+
+      /* fork first, we are expected to act from the background */
+      pid_t pid = fork();
+      if(pid < 0)
+	{
+	  perror(PACKAGE ": failed to fork to background");
+	  exit(1);
+	}
+      else if(pid)
+	exit(0); /* parent process */
+
+      /* finally try to get it on ... */
+      netfs_init();
+
+      struct port_info *newpi;
+      error_t err = ports_create_port(netfs_control_class, netfs_port_bucket,
+				      sizeof(struct port_info), &newpi);
+      
+      if(! err)
+	{
+	  mach_port_t right = ports_get_send_right(newpi);
+	  
+	  err = file_set_translator(ul_node, 0, FS_TRANS_SET, 0, "", 0, 
+				    right, MACH_MSG_TYPE_COPY_SEND);
+	  mach_port_deallocate(mach_task_self(), right);
+	  ports_port_deref(newpi);
+	}
+
+      if(err)
+	error(11, err, "Translator startup failure: fuse_mount_compat22");
+    }
 
   /* create our root node */
   {

@@ -507,3 +507,25 @@ fuse_loop_mt(struct fuse *f)
 
   return fuse_loop_mt_proc(f, (fuse_processor_t) fuse_process_cmd, NULL);
 }
+
+
+void
+fuse_exit(struct fuse *f)
+{
+  /*
+   * well, we should make fuse_main exit, this is, we would have to
+   * cancel ports_manage_port_operations_one_thread. however this is
+   * not possible, therefore buy the farm for the moment.
+   */
+  error(1, EIEIO, "fuse_exit called");
+}
+
+
+int
+fuse_exited(struct fuse *f)
+{
+  /*
+   * if fuse_exit is called, we buy the farm, therefore we still must be alive.
+   */
+  return 0;
+}

@@ -1012,10 +1012,14 @@ error_t netfs_attempt_write (struct iouser *cred, struct node *node,
 
   node->nn->info.compat22.writepage = 0; /* cannot distinct on the Hurd :( */
 
-  if(fuse_ops_compat22 && fuse_ops_compat22->open)
-    if((err = fuse_ops_compat22->open(node->nn->path,
-				      &node->nn->info.compat22)))
-      goto out;
+  if(fuse_ops_compat2 && fuse_ops_compat2->open
+     && (err = fuse_ops_compat2->open(node->nn->path,
+				      node->nn->info.compat22.flags)))
+    goto out;
+  else if(fuse_ops_compat22 && fuse_ops_compat22->open
+	  && (err = fuse_ops_compat22->open(node->nn->path,
+					    &node->nn->info.compat22)))
+    goto out;
 
   int sz = fuse_ops_compat22 ? 
     (fuse_ops_compat22->write(node->nn->path, data, *len,
@@ -1032,10 +1036,13 @@ error_t netfs_attempt_write (struct iouser *cred, struct node *node,
   if(sz >= 0 && fuse_ops_compat22 && fuse_ops_compat22->flush)
     err = fuse_ops_compat22->flush(node->nn->path, &node->nn->info.compat22);
 
-  if(fuse_ops_compat22 && fuse_ops_compat22->open
-     && fuse_ops_compat22->release)
+  if(fuse_ops_compat2 && fuse_ops_compat2->open && fuse_ops_compat2->release)
+    fuse_ops_compat2->release(node->nn->path, node->nn->info.compat22.flags);
+
+  else if(fuse_ops_compat22 && fuse_ops_compat22->open
+	  && fuse_ops_compat22->release)
     fuse_ops_compat22->release(node->nn->path, &node->nn->info.compat22);
-     
+  
   if(sz < 0)
     err = -sz;
   else
@@ -1112,10 +1119,14 @@ error_t netfs_attempt_read (struct iouser *cred, struct node *node,
       goto out;
     }
 
-  if(fuse_ops_compat22 && fuse_ops_compat22->open)
-    if((err = fuse_ops_compat22->open(node->nn->path,
-				      &node->nn->info.compat22)))
-      goto out;
+  if(fuse_ops_compat2 && fuse_ops_compat2->open
+     && (err = fuse_ops_compat2->open(node->nn->path,
+				      node->nn->info.compat22.flags)))
+    goto out;
+  else if(fuse_ops_compat22 && fuse_ops_compat22->open
+	  && (err = fuse_ops_compat22->open(node->nn->path,
+					    &node->nn->info.compat22)))
+    goto out;
 
   int sz = fuse_ops_compat22 ? 
     (fuse_ops_compat22->read(node->nn->path, data, *len,
@@ -1132,8 +1143,11 @@ error_t netfs_attempt_read (struct iouser *cred, struct node *node,
   if(sz >= 0 && fuse_ops_compat22 && fuse_ops_compat22->flush)
     err = fuse_ops_compat22->flush(node->nn->path, &node->nn->info.compat22);
 
-  if(fuse_ops_compat22 && fuse_ops_compat22->open
-     && fuse_ops_compat22->release)
+  if(fuse_ops_compat2 && fuse_ops_compat2->open && fuse_ops_compat2->release)
+    fuse_ops_compat2->release(node->nn->path, node->nn->info.compat22.flags);
+
+  else if(fuse_ops_compat22 && fuse_ops_compat22->open
+	  && fuse_ops_compat22->release)
     fuse_ops_compat22->release(node->nn->path, &node->nn->info.compat22);
 
   if(sz < 0)

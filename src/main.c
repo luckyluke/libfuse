@@ -35,12 +35,16 @@ struct _libfuse_params libfuse_params = { 0 };
 /* pointer to the fuse_operations structure of this translator process */
 const struct fuse_operations_compat22 *fuse_ops_compat22 = NULL;
 const struct fuse_operations_compat2 *fuse_ops_compat2 = NULL;
+const struct fuse_operations *fuse_ops25 = NULL;
 
 /* the port where to write out debug messages to, NULL to omit these */
 FILE *debug_port = NULL;
 
 /* the private data pointer returned from init() callback */
 void *fsys_privdata = NULL;
+
+/* bootstrap fuse translator */
+static int fuse_bootstrap(const char *mountpoint);
 
 
 /* Interpret a __single__ mount option 
@@ -271,7 +275,11 @@ int
 fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	       size_t op_size)
 {
-  assert(0);
+  fuse_parse_argv(argc, argv);
+
+  int fd = fuse_mount(argv[0], NULL);
+  return (libfuse_params.disable_mt ? fuse_loop : fuse_loop_mt)
+    (fuse_new(fd, NULL, op, op_size));
 }
 
 
@@ -304,7 +312,26 @@ struct fuse *
 fuse_new(int fd, struct fuse_args *args,
 	 const struct fuse_operations *op, size_t op_size)
 {
-  assert(0);
+  (void) op_size; /* FIXME, see what the real Fuse library does with 
+		   * this argument */
+
+  if(fd != FUSE_MAGIC)
+    return NULL; 
+
+  if(args && args->allocated)
+    {
+      int i;
+      for(i = 0; i < args->argc; i ++)
+	if(fuse_parse_opt(args->argv[i]))
+	  return NULL;
+    }
+
+  fuse_ops25 = op;
+
+  if(op->init)
+    fsys_privdata = op->init();
+
+  return (void *) FUSE_MAGIC; /* we don't have a fuse structure, sorry. */
 }
 
 
@@ -339,7 +366,15 @@ fuse_new_compat22(int fd, const char *opts,
 int 
 fuse_mount(const char *mountpoint, struct fuse_args *args)
 {
-  assert(0);
+  if(args && args->allocated)
+    {
+      int i;
+      for(i = 0; i < args->argc; i ++)
+	if(fuse_parse_opt(args->argv[i]))
+	  return 0;
+    }
+
+  return fuse_bootstrap(mountpoint);
 }
 
 
@@ -349,6 +384,12 @@ fuse_mount_compat22(const char *mountpoint, const char *opts)
   if(fuse_parse_opts(opts))
     return 0;
 
+  return fuse_bootstrap(mountpoint);
+}
+
+static int
+fuse_bootstrap(const char *mountpoint)
+{
   mach_port_t bootstrap, ul_node;
   task_get_bootstrap_port(mach_task_self(), &bootstrap);
 
@@ -519,6 +560,7 @@ fuse_loop_mt(struct fuse *f)
 void
 fuse_exit(struct fuse *f)
 {
+  (void) f;
   /*
    * well, we should make fuse_main exit, this is, we would have to
    * cancel ports_manage_port_operations_one_thread. however this is
@@ -531,6 +573,8 @@ fuse_exit(struct fuse *f)
 int
 fuse_exited(struct fuse *f)
 {
+  (void) f;
+
   /*
    * if fuse_exit is called, we buy the farm, therefore we still must be alive.
    */

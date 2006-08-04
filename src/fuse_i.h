@@ -32,13 +32,37 @@
 /* pointer to the fuse_operations structure of this translator process */
 extern const struct fuse_operations_compat22 *fuse_ops_compat22;
 extern const struct fuse_operations_compat2 *fuse_ops_compat2;
+extern const struct fuse_operations *fuse_ops25;
 
-#define FUSE_OP_HAVE(a) ((fuse_ops_compat22) ? \
-                          (fuse_ops_compat22->a != NULL) : \
-			  (fuse_ops_compat2->a != NULL))
-#define FUSE_OP_CALL(a,b...) ((fuse_ops_compat22) ? \
+#define FUSE_OP_HAVE(a) (fuse_ops25 ? \
+			 (fuse_ops25->a != NULL) \
+			 : ((fuse_ops_compat22) ? \
+			    (fuse_ops_compat22->a != NULL) :	\
+			    (fuse_ops_compat2->a != NULL)))
+#define FUSE_OP_CALL(a,b...) (fuse_ops25 ? \
+			      (fuse_ops25->a(b)) : \
+			      ((fuse_ops_compat22) ?	   \
                                (fuse_ops_compat22->a(b)) : \
-                               (fuse_ops_compat2->a(b)))
+                               (fuse_ops_compat2->a(b))))
+
+#define FUSE_OP_HAVE22(a) (fuse_ops25 ? \
+			   (fuse_ops25->a != NULL)	\
+			   : ((fuse_ops_compat22) ?		\
+			      (fuse_ops_compat22->a != NULL) : 0))
+
+#define FUSE_OP_CALL22(a,b...) (fuse_ops25 ? \
+				(fuse_ops25->a(b)) :	   \
+				((fuse_ops_compat22) ?	   \
+				 (fuse_ops_compat22->a(b)) : (0)))
+
+#define NN_INFO(dir)   (fuse_ops25 ?				\
+			((void *) &(dir)->nn->info.info25)	\
+			: ((void *) &(dir)->nn->info.compat22))
+
+#define NN_INFO_APPLY(node,key) do {		\
+    if(fuse_ops25) (node)->nn->info.info25.key;	\
+    else (node)->nn->info.compat22.key;		\
+  } while(0)
 
 /*****************************************************************************
  *** netnodes (in memory representation of libfuse's files or directories) ***
@@ -57,6 +81,7 @@ struct netnode {
    */
   union {
     struct fuse_file_info_compat22 compat22;
+    struct fuse_file_info info25;
   } info;
 
   /* pointer to our parent's netnode, if any */

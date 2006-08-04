@@ -1,7 +1,7 @@
 /**********************************************************
  * netfs.c
  *
- * Copyright(C) 2004, 2005 by Stefan Siegl <ssiegl@gmx.de>, Germany
+ * Copyright(C) 2004,2005,2006 by Stefan Siegl <stesie@brokenpipe.de>, Germany
  * 
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Publice License,
@@ -49,6 +49,48 @@ struct fuse_dirhandle {
   char *abspath;
   char *filename;
 };
+
+
+static inline void
+refresh_context_struct(struct iouser *cred)
+{
+  FUNC_PROLOGUE("refresh_context_struct");
+  struct fuse_context *ctx = cthread_data(cthread_self());
+  
+  if(! ctx) 
+    {
+      ctx = malloc(sizeof(struct fuse_context));
+      if(! ctx) 
+	{
+	  perror(PACKAGE_NAME);
+	  return;
+	}
+
+      cthread_set_data(cthread_self(), ctx);
+
+      ctx->fuse = (void *) FUSE_MAGIC;
+      ctx->private_data = fsys_privdata;
+      
+      /* FIXME, how to figure out the pid of the program asking for the
+       * filesystem operation? */
+      ctx->pid = 0;
+    }
+
+  if(cred)
+    {
+      ctx->uid = cred->uids->num ? cred->uids->ids[0] : 
+	(libfuse_params.force_uid ? libfuse_params.uid : geteuid());
+      ctx->gid = cred->gids->num ? cred->gids->ids[0] : 
+	(libfuse_params.force_gid ? libfuse_params.gid : getegid());
+    }
+  else
+    {
+      ctx->uid = libfuse_params.force_uid ? libfuse_params.uid : geteuid();
+      ctx->gid = libfuse_params.force_gid ? libfuse_params.gid : getegid();
+    }      
+
+  FUNC_EPILOGUE_NORET();
+}
 
 /* Check whether to allow access to a node, testing the allow_root and
  * allow_other flag.  This does not check whether default permissions
@@ -105,7 +147,10 @@ netfs_validate_stat (struct node *node, struct iouser *cred)
     FUNC_RETURN(EPERM);
 
   if(FUSE_OP_HAVE(getattr))
-    err = -FUSE_OP_CALL(getattr, node->nn->path, &node->nn_stat);
+    {
+      refresh_context_struct(cred);
+      err = -FUSE_OP_CALL(getattr, node->nn->path, &node->nn_stat);
+    }
 
   if(! err)
     {
@@ -267,7 +312,10 @@ netfs_attempt_statfs (struct iouser *cred, struct node *node,
     err = EPERM;
 
   else if(FUSE_OP_HAVE(statfs))
-    err = -FUSE_OP_CALL(statfs, node->nn->path, st);
+    {
+      refresh_context_struct(cred);
+      err = -FUSE_OP_CALL(statfs, node->nn->path, st);
+    }
 
   else
     err = EOPNOTSUPP;
@@ -482,7 +530,10 @@ error_t netfs_attempt_syncfs (struct iouser *cred, int wait)
   if(test_allow_root_or_other(cred))
     err = EPERM;
   else
-    err = fuse_sync_filesystem();
+    {
+      refresh_context_struct(cred);
+      err = fuse_sync_filesystem();
+    }
 
   FUNC_EPILOGUE(err);
 }

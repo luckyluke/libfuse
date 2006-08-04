@@ -1,7 +1,7 @@
 /**********************************************************
  * fuse_i.h
  *
- * Copyright (C) 2004, 2005 by Stefan Siegl <ssiegl@gmx.de>, Germany
+ * Copyright (C) 2004, 2005, 2006 by Stefan Siegl <ssiegl@gmx.de>, Germany
  * 
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Publice License,
@@ -130,6 +130,12 @@ struct _libfuse_params {
 };
 
 extern struct _libfuse_params libfuse_params;
+
+/* the private data pointer returned from init() callback */
+extern void *fsys_privdata;
+
+/* magic number, passed from fuse_mount to fuse_new */
+#define FUSE_MAGIC ((int) 0x66757365)
 
 
 

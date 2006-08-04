@@ -39,9 +39,8 @@ const struct fuse_operations_compat2 *fuse_ops_compat2 = NULL;
 /* the port where to write out debug messages to, NULL to omit these */
 FILE *debug_port = NULL;
 
-/* magic number, passed from fuse_mount to fuse_new */
-#define FUSE_MAGIC ((int) 0x66757365)
-
+/* the private data pointer returned from init() callback */
+void *fsys_privdata = NULL;
 
 
 /* Interpret a __single__ mount option 
@@ -322,6 +321,9 @@ fuse_new_compat22(int fd, const char *opts,
 
   fuse_ops_compat22 = op;
 
+  if(op->init)
+    fsys_privdata = op->init();
+
   return (void *) FUSE_MAGIC; /* we don't have a fuse structure, sorry. */
 }
 
@@ -528,4 +530,12 @@ fuse_exited(struct fuse *f)
    * if fuse_exit is called, we buy the farm, therefore we still must be alive.
    */
   return 0;
+}
+
+
+struct fuse_context *
+fuse_get_context(void)
+{
+  struct fuse_context *ctx = cthread_data(cthread_self());
+  return ctx;
 }

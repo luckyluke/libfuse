@@ -159,7 +159,7 @@ fuse_parse_argv(int argc, char *argv[])
   int opt;
   FILE *opt_help = NULL;
 
-  while((opt = getopt(argc, argv, "d::o:hs")) >= 0)
+  while((opt = getopt(argc, argv, "d::o:hsf")) >= 0)
     switch(opt)
       {
       case 'd':
@@ -186,6 +186,10 @@ fuse_parse_argv(int argc, char *argv[])
 	libfuse_params.disable_mt = 1;
 	break;
 
+      case 'f':
+	libfuse_params.foreground = 1;
+	break;
+
       case '?':
       default:
 	opt_help = stderr;
@@ -206,6 +210,7 @@ fuse_parse_argv(int argc, char *argv[])
 	      "    -d[FILENAME]           "
 	      "enable debug output (default=stderr)\n"
 	      "    -s                     disable multi-threaded operation\n"
+	      "    -f                     don't fork to background\n"
 	      /* "    -r                     "
 	       * "mount read only (equivalent to '-o ro')\n" */
 	      "    -o opt,[opt...]        mount options\n"
@@ -365,7 +370,7 @@ fuse_mount_compat22(const char *mountpoint, const char *opts)
 	error(10, 0, "Unable to access underlying node");
 
       /* fork first, we are expected to act from the background */
-      pid_t pid = fork();
+      pid_t pid = libfuse_params.foreground ? 0 : fork();
       if(pid < 0)
 	{
 	  perror(PACKAGE ": failed to fork to background");

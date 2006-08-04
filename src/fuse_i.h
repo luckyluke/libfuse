@@ -123,6 +123,9 @@ struct _libfuse_params {
   /* whether to disable multithreading (if using fuse_main) */
   unsigned disable_mt          : 1;
 
+  /* whether to fork to background or not (if started without settrans) */
+  unsigned foreground          : 1;
+
   /* the uid and gid to set and which umask to apply (if bitfields are set) */
   uid_t uid;
   gid_t gid;

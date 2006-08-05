@@ -1,7 +1,7 @@
 /**********************************************************
  * netnode.c
  *
- * Copyright(C) 2004, 2005 by Stefan Siegl <ssiegl@gmx.de>, Germany
+ * Copyright(C) 2004,2005,2006 by Stefan Siegl <stesie@brokenpipe.de>, Germany
  * 
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Publice License,
@@ -24,7 +24,7 @@
 #include "fuse_i.h"
 #include "fuse.h"
 
-#define HASH_BUCKETS 256
+#define HASH_BUCKETS 512
 
 struct hash_element;
 static struct hash_element {
@@ -44,14 +44,16 @@ ino_t fuse_next_inode = 1;
 
 
 
-static int
+static unsigned int
 fuse_netnode_hash_value(const char *path)
 {
-  int hash = 0;
-  int maxlen = 12; /* use the first 12 chars for hash generation only */
+  unsigned int hash = 0, a = 23, b = 251;
 
-  while(maxlen -- && *path)
-    hash += *(path ++);
+  while(*path)
+    {
+      hash = hash * a + *(path ++);
+      a *= b;
+    }
 
   return hash % HASH_BUCKETS;
 }
@@ -63,7 +65,9 @@ fuse_make_netnode(struct netnode *parent, const char *path)
 {
   struct hash_element *hash_el;
   struct netnode *nn;
-  int hash_value = fuse_netnode_hash_value(path);
+
+  unsigned int hash_value = fuse_netnode_hash_value(path);
+  DEBUG("make_netnode", "hash for '%s' is %u\n", path, hash_value);
 
   DEBUG("netnodes_lock", "aquiring rwlock_reader_lock for %s.\n", path);
   rwlock_reader_lock(&fuse_netnodes_lock);

@@ -108,6 +108,8 @@ test_allow_root_or_other (struct iouser *cred)
 {
   FUNC_PROLOGUE("test_allow_root_or_other");
 
+  assert(cred);
+
   /* if allow_other is set, access is okay in any case */
   if(libfuse_params.allow_other) 
     FUNC_RETURN_FMT(0, "allow_other is set");
@@ -554,7 +556,7 @@ error_t netfs_attempt_syncfs (struct iouser *cred, int wait)
   FUNC_PROLOGUE("netfs_attempt_syncfs");
   error_t err;
 
-  if(test_allow_root_or_other(cred))
+  if(cred && test_allow_root_or_other(cred))
     err = EPERM;
   else
     {

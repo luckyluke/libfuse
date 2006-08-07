@@ -8,4 +8,6 @@ SUBDIRS = old
 fuseincludedir=$(includedir)/fuse
 fuseinclude_HEADERS = \
 	fuse.h \
+	fuse_opt.h \
+	fuse_common.h \
 	fuse_compat.h

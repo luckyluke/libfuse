@@ -113,6 +113,11 @@ fuse_parse_opt(char *opt)
       libfuse_params.force_umask = 1;
     }
 
+  else if(! strcmp(option, "fsname"))
+    {
+      /* nothing to do for us */
+    }
+
   else
     {
       fprintf(stderr, PACKAGE_NAME ": unsupported mount option: %s\n", option);

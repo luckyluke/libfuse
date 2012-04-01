@@ -1,0 +1,20 @@
+diff --git a/src/netfs.c b/src/netfs.c
+index a97b41b..bbb48f7 100644
+--- a/src/netfs.c
++++ b/src/netfs.c
+@@ -1185,11 +1185,11 @@ netfs_attempt_utimes (struct iouser *cred, struct node *node,
+ 
+   if (! err)
+     {
+-      node->nn_stat.st_mtime = utb.modtime;
+-      node->nn_stat.st_mtime_usec = 0;
++      node->nn_stat.st_mtim.tv_sec = utb.modtime;
++      node->nn_stat.st_mtim.tv_nsec = 0;
+       
+-      node->nn_stat.st_atime = utb.actime;
+-      node->nn_stat.st_atime_usec = 0;
++      node->nn_stat.st_atim.tv_sec = utb.actime;
++      node->nn_stat.st_atim.tv_nsec = 0;
+ 	
+       node->nn->may_need_sync = 1;
+     }

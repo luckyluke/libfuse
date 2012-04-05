@@ -1,4 +1,4 @@
-libfuse (0.0.20120401-0~1) unreleased; urgency=low
+libfuse (0.0.20120405-0~1) unreleased; urgency=low
  
   * Initial release (Closes: #nnnn)
 

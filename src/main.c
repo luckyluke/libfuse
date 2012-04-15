@@ -287,6 +287,14 @@ fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
     (fuse_new(fd, NULL, op, op_size));
 }
 
+#undef fuse_main
+int fuse_main(void);
+int fuse_main(void)
+{
+  fprintf(stderr, "fuse_main is supposed to be used via the macro, not the symbol\n");
+  return -1;
+}
+
 
 /* Create a new FUSE filesystem, actually there's nothing for us to do 
  * on the Hurd.

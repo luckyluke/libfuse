@@ -1,5 +1,5 @@
-libfuse (0.0.20120415-0~1) unreleased; urgency=low
+libfuse (0.0.20120415-1) unreleased; urgency=low
  
-  * Initial release (Closes: #nnnn)
+  * Initial release (Closes: #669649)
 
- -- Samuel Thibault <sthibault@debian.org>  Sun, 01 Apr 2012 19:52:15 +0200
+ -- Samuel Thibault <sthibault@debian.org>  Mon, 23 Apr 2012 01:26:26 +0200

@@ -1,4 +1,4 @@
-Source: libfuse
+Source: hurd-libfuse
 Section: utils
 Priority: extra
 Maintainer: GNU Hurd Maintainers <debian-hurd@lists.debian.org>

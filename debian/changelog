@@ -1,4 +1,4 @@
-libfuse (0.0.20120415-1) unreleased; urgency=low
+hurd-libfuse (0.0.20120415-1) unreleased; urgency=low
  
   * Initial release (Closes: #669649)
 

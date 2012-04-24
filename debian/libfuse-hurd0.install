@@ -1,1 +1,1 @@
-usr/lib/libfuse.so.*
+usr/lib/*/libfuse.so.*

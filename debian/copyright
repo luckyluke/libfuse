@@ -21,6 +21,14 @@ License:
 The full text of the GNU General Public License version 2 can be found in
 "/usr/share/common-licenses/GPL-2".
 
+include/{fuse_common.h,fuse_compat.h,fuse.h} are licensed under:
+
+    This program can be distributed under the terms of the GNU LGPL.
+    See the file COPYING.LIB.
+
+The full text of the GNU LGPL can be found in
+"/usr/share/common-licenses/LGPL"
+
 The Debian packaging is:
 
     Copyright (C) 2012 Samuel Thibault <samuel.thibault@debian.org>

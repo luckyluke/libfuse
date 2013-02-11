@@ -55,7 +55,7 @@ static inline void
 refresh_context_struct(struct iouser *cred)
 {
   FUNC_PROLOGUE("refresh_context_struct");
-  struct fuse_context *ctx = cthread_data(cthread_self());
+  struct fuse_context *ctx = libfuse_ctx;
   
   if(! ctx) 
     {
@@ -66,7 +66,7 @@ refresh_context_struct(struct iouser *cred)
 	  return;
 	}
 
-      cthread_set_data(cthread_self(), ctx);
+      libfuse_ctx = ctx;
 
       ctx->fuse = (void *) FUSE_MAGIC;
       ctx->private_data = fsys_privdata;
@@ -259,9 +259,9 @@ netfs_attempt_create_file (struct iouser *user, struct node *dir,
   free(path); /* fuse_make_netnode strdup'ed it. */
 
   if(*node)
-    mutex_lock(&(*node)->lock);
+    pthread_mutex_lock(&(*node)->lock);
 
-  mutex_unlock (&dir->lock);
+  pthread_mutex_unlock (&dir->lock);
 
   FUNC_EPILOGUE(err);
 }
@@ -507,7 +507,7 @@ error_t netfs_attempt_mkfile (struct iouser *user, struct node *dir,
   if(err)
     {
       /* dir has to be unlocked no matter what ... */
-      mutex_unlock (&dir->lock);
+      pthread_mutex_unlock (&dir->lock);
       goto out;
     }
 
@@ -520,7 +520,7 @@ error_t netfs_attempt_mkfile (struct iouser *user, struct node *dir,
       err = netfs_attempt_create_file(user, dir, name, mode, node);
 
       if(err == EEXIST)
-	mutex_lock(&dir->lock); /* netfs_attempt_create_file just unlocked
+	pthread_mutex_lock(&dir->lock); /* netfs_attempt_create_file just unlocked
 				 * it for us, however we need to call it once
 				 * more ...
 				 */
@@ -539,7 +539,7 @@ error_t netfs_attempt_mkfile (struct iouser *user, struct node *dir,
    * netfs_attempt_create_file has already done that for us
    */
 
-  /* mutex_unlock (&dir->lock);
+  /* pthread_mutex_unlock (&dir->lock);
    * netfs_attempt_create_file already unlocked the node for us.
    */
   FUNC_EPILOGUE(err);
@@ -620,13 +620,13 @@ error_t netfs_attempt_unlink (struct iouser *user, struct node *dir,
 
   err = netfs_attempt_lookup(user, dir, name, &node);
   assert(dir != node);
-  mutex_lock(&dir->lock); /* re-lock directory, since netfs_attempt_lookup
+  pthread_mutex_lock(&dir->lock); /* re-lock directory, since netfs_attempt_lookup
 			   * unlocked it for us
 			   */  
   if(err)
     goto out;
 
-  mutex_unlock(&node->lock);
+  pthread_mutex_unlock(&node->lock);
 
   if((err = netfs_validate_stat(dir, user))
      || (err = netfs_validate_stat(node, user))
@@ -823,12 +823,12 @@ error_t netfs_attempt_lookup (struct iouser *user, struct node *dir,
     }
 
 out:
-  mutex_unlock(&dir->lock);
+  pthread_mutex_unlock(&dir->lock);
 
   if(err)
     *node = NULL;
   else
-    mutex_lock(&(*node)->lock);
+    pthread_mutex_lock(&(*node)->lock);
 
   FUNC_EPILOGUE(err);
 }
@@ -846,13 +846,13 @@ error_t netfs_attempt_link (struct iouser *user, struct node *dir,
   error_t err;
   struct node *node = NULL;
 
-  mutex_lock(&dir->lock);
+  pthread_mutex_lock(&dir->lock);
 
   if((err = netfs_attempt_lookup(user, dir, name, &node)))
     goto out_nounlock; /* netfs_attempt_lookup unlocked dir */
 
   assert(dir != node);
-  mutex_lock(&dir->lock);
+  pthread_mutex_lock(&dir->lock);
 
   if((err = netfs_validate_stat(node, user))
      || (libfuse_params.deflt_perms
@@ -877,9 +877,9 @@ error_t netfs_attempt_link (struct iouser *user, struct node *dir,
    * create a netnode with the may_need_sync flag set!!   */
 
  out:
-  mutex_unlock(&dir->lock);
+  pthread_mutex_unlock(&dir->lock);
 
-  mutex_unlock(&node->lock);
+  pthread_mutex_unlock(&node->lock);
   netfs_nrele(node);
 
  out_nounlock:
@@ -899,7 +899,7 @@ error_t netfs_attempt_rmdir (struct iouser *user,
 
   err = netfs_attempt_lookup(user, dir, name, &node);
   assert(dir != node);
-  mutex_lock(&dir->lock); /* netfs_attempt_lookup unlocked dir */
+  pthread_mutex_lock(&dir->lock); /* netfs_attempt_lookup unlocked dir */
 
   if(err)
     goto out_nounlock; 
@@ -919,7 +919,7 @@ error_t netfs_attempt_rmdir (struct iouser *user,
    * FIXME, make sure nn->may_need_sync is set */
 
  out:
-  mutex_unlock(&node->lock);
+  pthread_mutex_unlock(&node->lock);
   netfs_nrele(node);
 
  out_nounlock:
@@ -1009,7 +1009,7 @@ error_t netfs_attempt_rename (struct iouser *user, struct node *fromdir,
       goto out_nounlock;
     }
 
-  mutex_lock(&fromdir->lock);
+  pthread_mutex_lock(&fromdir->lock);
 
   if(netfs_attempt_lookup(user, fromdir, fromname, &fromnode))
     {
@@ -1019,7 +1019,7 @@ error_t netfs_attempt_rename (struct iouser *user, struct node *fromdir,
 			  */
     }
 
-  mutex_lock(&todir->lock);
+  pthread_mutex_lock(&todir->lock);
 
   if((err = netfs_validate_stat(fromdir, user))
      || (libfuse_params.deflt_perms
@@ -1062,9 +1062,9 @@ error_t netfs_attempt_rename (struct iouser *user, struct node *fromdir,
 
  out:
   free(topath);
-  mutex_unlock(&todir->lock);
+  pthread_mutex_unlock(&todir->lock);
 
-  mutex_unlock(&fromnode->lock);
+  pthread_mutex_unlock(&fromnode->lock);
   netfs_nrele(fromnode);
 
  out_nounlock:
@@ -1185,11 +1185,11 @@ netfs_attempt_utimes (struct iouser *cred, struct node *node,
 
   if (! err)
     {
-      node->nn_stat.st_mtime = utb.modtime;
-      node->nn_stat.st_mtime_usec = 0;
+      node->nn_stat.st_mtim.tv_sec = utb.modtime;
+      node->nn_stat.st_mtim.tv_nsec = 0;
       
-      node->nn_stat.st_atime = utb.actime;
-      node->nn_stat.st_atime_usec = 0;
+      node->nn_stat.st_atim.tv_sec = utb.actime;
+      node->nn_stat.st_atim.tv_nsec = 0;
 	
       node->nn->may_need_sync = 1;
     }
@@ -1695,7 +1695,7 @@ netfs_node_norefs (struct node *node)
   assert(node);
 
   DEBUG("netnode-lock", "locking netnode, path=%s\n", node->nn->path);
-  mutex_lock(&node->nn->lock);
+  pthread_mutex_lock(&node->nn->lock);
 
   if(node->nn->anonymous && FUSE_OP_HAVE(unlink))
     {
@@ -1707,7 +1707,7 @@ netfs_node_norefs (struct node *node)
 
   node->nn->node = NULL;
 
-  mutex_unlock(&node->nn->lock);
+  pthread_mutex_unlock(&node->nn->lock);
   DEBUG("netnode-lock", "netnode unlocked.\n"); /* no ref to node->nn av. */
 
   FUNC_EPILOGUE_NORET();

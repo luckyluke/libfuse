@@ -18,7 +18,6 @@
 #include <stdio.h>
 #include <error.h>
 #include <string.h>
-#include <rwlock.h>
 #include <hurd/netfs.h>
 
 #include "fuse_i.h"
@@ -35,7 +34,7 @@ static struct hash_element {
 /* rwlock needs to be held when touching either fuse_netnodes hash or
  * fuse_next_inode variable
  */
-struct rwlock fuse_netnodes_lock = RWLOCK_INITIALIZER;
+pthread_rwlock_t fuse_netnodes_lock = PTHREAD_RWLOCK_INITIALIZER;
 
 /* next inode number that will be assigned
  * (fuse_netnodes_lock must be write locked, when touching this)
@@ -69,8 +68,8 @@ fuse_make_netnode(struct netnode *parent, const char *path)
   unsigned int hash_value = fuse_netnode_hash_value(path);
   DEBUG("make_netnode", "hash for '%s' is %u\n", path, hash_value);
 
-  DEBUG("netnodes_lock", "aquiring rwlock_reader_lock for %s.\n", path);
-  rwlock_reader_lock(&fuse_netnodes_lock);
+  DEBUG("netnodes_lock", "aquiring pthread_rwlock_rdlock for %s.\n", path);
+  pthread_rwlock_rdlock(&fuse_netnodes_lock);
 
   hash_el = &fuse_netnodes[hash_value];
   if(hash_el->nn)
@@ -78,15 +77,15 @@ fuse_make_netnode(struct netnode *parent, const char *path)
       if(! strcmp(hash_el->nn->path, path))
 	{
 	  nn = hash_el->nn;
-	  rwlock_reader_unlock(&fuse_netnodes_lock);
-	  DEBUG("netnodes_lock", "releasing rwlock_reader_lock.\n");
+	  pthread_rwlock_unlock(&fuse_netnodes_lock);
+	  DEBUG("netnodes_lock", "releasing pthread_rwlock_rdlock.\n");
 
 	  return nn;
 	}
     while((hash_el = hash_el->next));
 
-  rwlock_reader_unlock(&fuse_netnodes_lock);
-  DEBUG("netnodes_lock", "releasing rwlock_reader_lock.\n");
+  pthread_rwlock_unlock(&fuse_netnodes_lock);
+  DEBUG("netnodes_lock", "releasing pthread_rwlock_rdlock.\n");
 
   nn = malloc(sizeof(*nn));
   if(! nn)
@@ -95,10 +94,10 @@ fuse_make_netnode(struct netnode *parent, const char *path)
   nn->path = strdup(path);
   nn->parent = parent;
   nn->node = NULL;
-  mutex_init(&nn->lock);
+  pthread_mutex_init(&nn->lock, NULL);
 
-  DEBUG("netnodes_lock", "aquiring rwlock_writer_lock for %s.\n", path);
-  rwlock_writer_lock(&fuse_netnodes_lock);
+  DEBUG("netnodes_lock", "aquiring pthread_rwlock_wrlock for %s.\n", path);
+  pthread_rwlock_wrlock(&fuse_netnodes_lock);
 
   nn->inode = fuse_next_inode ++;
 
@@ -111,8 +110,8 @@ fuse_make_netnode(struct netnode *parent, const char *path)
       struct hash_element *new = malloc(sizeof(*new));
 
       if(! new) {
-	rwlock_writer_unlock(&fuse_netnodes_lock);
-	DEBUG("netnodes_lock", "releasing rwlock_writer_lock.\n");
+	pthread_rwlock_unlock(&fuse_netnodes_lock);
+	DEBUG("netnodes_lock", "releasing pthread_rwlock_wrlock.\n");
 	free(nn);
 	return NULL; /* can't help, sorry. */
       }
@@ -126,8 +125,8 @@ fuse_make_netnode(struct netnode *parent, const char *path)
 
   hash_el->nn = nn;
 
-  rwlock_writer_unlock(&fuse_netnodes_lock);
-  DEBUG("netnodes_lock", "releasing rwlock_writer_lock.\n");
+  pthread_rwlock_unlock(&fuse_netnodes_lock);
+  DEBUG("netnodes_lock", "releasing pthread_rwlock_wrlock.\n");
   return nn;
 }
 
@@ -145,7 +144,7 @@ fuse_sync_filesystem(void)
     return err; /* success */
 
   /* make sure, nobody tries to confuse us */
-  rwlock_writer_lock(&fuse_netnodes_lock);
+  pthread_rwlock_wrlock(&fuse_netnodes_lock);
 
   for(i = 0; i < HASH_BUCKETS; i ++)
     {
@@ -175,6 +174,6 @@ fuse_sync_filesystem(void)
     }
 
  out:
-  rwlock_writer_unlock(&fuse_netnodes_lock);
+  pthread_rwlock_unlock(&fuse_netnodes_lock);
   return err;
 }

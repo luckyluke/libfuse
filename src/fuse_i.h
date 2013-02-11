@@ -64,6 +64,9 @@ extern const struct fuse_operations *fuse_ops25;
     else (node)->nn->info.compat22.key;		\
   } while(0)
 
+
+extern __thread struct fuse_context *libfuse_ctx;
+
 /*****************************************************************************
  *** netnodes (in memory representation of libfuse's files or directories) ***
  *****************************************************************************/
@@ -93,7 +96,7 @@ struct netnode {
   struct node *node;
 
   /* lock for *node pointer */
-  struct mutex lock;
+  pthread_mutex_t lock;
 
   /* whether this is an anonymous node, i.e. it has to be deleted,
    * after the last node associated to it, was removed.

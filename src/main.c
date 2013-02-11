@@ -37,6 +37,8 @@ const struct fuse_operations_compat22 *fuse_ops_compat22 = NULL;
 const struct fuse_operations_compat2 *fuse_ops_compat2 = NULL;
 const struct fuse_operations *fuse_ops25 = NULL;
 
+__thread struct fuse_context *libfuse_ctx;
+
 /* the port where to write out debug messages to, NULL to omit these */
 FILE *debug_port = NULL;
 
@@ -598,6 +600,5 @@ fuse_exited(struct fuse *f)
 struct fuse_context *
 fuse_get_context(void)
 {
-  struct fuse_context *ctx = cthread_data(cthread_self());
-  return ctx;
+  return libfuse_ctx;
 }

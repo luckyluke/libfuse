@@ -32,13 +32,13 @@ fuse_make_node(struct netnode *nn)
 
   DEBUG("fuse_make_node", "creating node for %s.\n", nn->path);
   DEBUG("netnode-lock", "locking netnode, path=%s\n", nn->path);
-  mutex_lock(&nn->lock);
+  pthread_mutex_lock(&nn->lock);
 
   if((node = nn->node))
     {
       /* there already is a node, therefore return another reference to it */
       netfs_nref(node);
-      mutex_unlock(&nn->lock);
+      pthread_mutex_unlock(&nn->lock);
       DEBUG("netnode-lock", "UNlocking netnode, path=%s\n", nn->path);
       DEBUG("fuse_make_node", "reusing already existing node, %s\n", nn->path);
       return node;
@@ -46,7 +46,7 @@ fuse_make_node(struct netnode *nn)
 
   if(! (node = netfs_make_node(nn)))
     {
-      mutex_unlock(&nn->lock);
+      pthread_mutex_unlock(&nn->lock);
       DEBUG("netnode-lock", "UNlocking netnode, path=%s\n", nn->path);
       return NULL; /* doesn't look to good for us :-(   */
     }
@@ -62,7 +62,7 @@ fuse_make_node(struct netnode *nn)
   /* add pointer to our new node structure to the netnode */
   nn->node = node;
 
-  mutex_unlock(&nn->lock);
+  pthread_mutex_unlock(&nn->lock);
   DEBUG("netnode-lock", "UNlocking netnode, path=%s\n", nn->path);
   DEBUG("fuse_make_node", "created a new node for %s.\n", nn->path);
   return node;

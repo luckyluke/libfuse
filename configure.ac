@@ -24,7 +24,7 @@ if test -z "$mkdir_p"; then
 fi
 
 # Checks for libraries.
-AC_CHECK_LIB([threads], [rwlock_init])
+AC_CHECK_LIB([pthread], [pthread_rwlock_init])
 AC_CHECK_LIB([ports], [hurd_ihash_init])
 AC_CHECK_LIB([fshelp], [fshelp_touch])
 AC_CHECK_LIB([iohelp], [iohelp_initialize_conch])

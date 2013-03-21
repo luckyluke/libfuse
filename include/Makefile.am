@@ -3,11 +3,11 @@
 #
 # Copyright (C) 2005,2006 Stefan Siegl <stesie@brokenpipe.de>, Germany
 
-SUBDIRS = old
-
 fuseincludedir=$(includedir)/fuse
 fuseinclude_HEADERS = \
 	fuse.h \
 	fuse_opt.h \
 	fuse_common.h \
 	fuse_compat.h
+
+include_HEADERS = old/fuse.h

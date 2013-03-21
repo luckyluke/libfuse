@@ -87,13 +87,12 @@ fuse_make_netnode(struct netnode *parent, const char *path)
   pthread_rwlock_unlock(&fuse_netnodes_lock);
   DEBUG("netnodes_lock", "releasing pthread_rwlock_rdlock.\n");
 
-  nn = malloc(sizeof(*nn));
+  nn = calloc(1, sizeof(*nn));
   if(! nn)
     return NULL; /* unfortunately we cannot serve a netnode .... */
 
   nn->path = strdup(path);
   nn->parent = parent;
-  nn->node = NULL;
   pthread_mutex_init(&nn->lock, NULL);
 
   DEBUG("netnodes_lock", "aquiring pthread_rwlock_wrlock for %s.\n", path);

@@ -68,8 +68,8 @@ refresh_context_struct(struct iouser *cred)
 
       libfuse_ctx = ctx;
 
-      ctx->fuse = (void *) FUSE_MAGIC;
-      ctx->private_data = fsys_privdata;
+      ctx->fuse = libfuse_fuse;
+      ctx->private_data = libfuse_fuse->private_data;
       
       /* FIXME, how to figure out the pid of the program asking for the
        * filesystem operation? */

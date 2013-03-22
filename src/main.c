@@ -32,16 +32,13 @@ int netfs_maxsymlinks = 12;
 /* libfuse filesystem configuration */
 struct _libfuse_params libfuse_params = { 0 };
 
-/* pointer to the fuse_operations structure of this translator process */
-const struct fuse_operations *fuse_ops25 = NULL;
+/* pointer to the fuse structure of this translator process */
+struct fuse *libfuse_fuse = NULL;
 
 __thread struct fuse_context *libfuse_ctx;
 
 /* the port where to write out debug messages to, NULL to omit these */
 FILE *debug_port = NULL;
-
-/* the private data pointer returned from init() callback */
-void *fsys_privdata = NULL;
 
 /* bootstrap fuse translator */
 static int fuse_bootstrap(const char *mountpoint);
@@ -274,8 +271,7 @@ struct fuse *
 fuse_new(int fd, struct fuse_args *args,
 	 const struct fuse_operations *op, size_t op_size)
 {
-  (void) op_size; /* FIXME, see what the real Fuse library does with 
-		   * this argument */
+  struct fuse *new;
 
   if(fd != FUSE_MAGIC)
     return NULL; 
@@ -288,12 +284,26 @@ fuse_new(int fd, struct fuse_args *args,
 	  return NULL;
     }
 
-  fuse_ops25 = op;
+  new = calloc(1, sizeof *new);
+  if(! new)
+    return NULL;
 
-  if(op->init)
-    fsys_privdata = op->init();
+  switch (op_size)
+    {
+    case sizeof(new->op.ops25):
+      new->version = 25;
+      break;
+    default:
+      fprintf(stderr, "Unhandled size of fuse_operations: %d\n", op_size);
+      fprintf(stderr, "libfuse will abort now\n");
+      abort();
+    }
+  memcpy(&new->op, op, op_size);
 
-  return (void *) FUSE_MAGIC; /* we don't have a fuse structure, sorry. */
+  if(new->op.ops25.init != NULL)
+    new->private_data = new->op.ops25.init();
+
+  return new;
 }
 
 
@@ -389,11 +399,13 @@ fuse_bootstrap(const char *mountpoint)
 int
 fuse_loop(struct fuse *f)
 {
-  if(f != ((void *) FUSE_MAGIC))
+  if(! f)
     return -1; 
 
   static int server_timeout = 1000 * 60 * 10; /* ten minutes, just like in
 					       * init-loop.c of libnetfs */
+
+  libfuse_fuse = f;
 
   ports_manage_port_operations_one_thread(netfs_port_bucket,
 					  netfs_demuxer,
@@ -420,7 +432,7 @@ fuse_demuxer(mach_msg_header_t *inp,
   cmd.inp = inp;
   cmd.outp = outp;
 
-  fuse_proc((void *) FUSE_MAGIC, &cmd, fuse_proc_data);
+  fuse_proc(libfuse_fuse, &cmd, fuse_proc_data);
 
   return cmd.return_value;
 }
@@ -428,7 +440,7 @@ fuse_demuxer(mach_msg_header_t *inp,
 void
 fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 {
-  if(f != ((void *) FUSE_MAGIC)) 
+  if(! f)
     {
       cmd->return_value = -1; 
       return;
@@ -458,13 +470,15 @@ fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data)
   static int server_timeout = 1000 * 60 * 10; /* ten minutes, just like in
 					       * init-loop.c of libnetfs */
 
-  if(f != ((void *) FUSE_MAGIC))
+  if(! f)
     return -1; 
   
   /* copy the provided arguments to global variables to make them available
    * to fuse_demuxer ... */
   fuse_proc = proc;
   fuse_proc_data = data;
+
+  libfuse_fuse = f;
 
   ports_manage_port_operations_multithread(netfs_port_bucket,
 					   fuse_demuxer,

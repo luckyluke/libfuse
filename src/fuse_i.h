@@ -29,11 +29,19 @@
 	    __FILE__ ":%d\nyou're welcome to put your effort to here.\n\n", \
 	    __LINE__)
 
-/* pointer to the fuse_operations structure of this translator process */
-extern const struct fuse_operations *fuse_ops25;
+struct fuse {
+  int version;
+  union {
+    struct fuse_operations ops25;
+  } op;
+  void *private_data;
+};
 
-#define FUSE_OP_HAVE(a) (fuse_ops25->a != NULL)
-#define FUSE_OP_CALL(a,b...) (fuse_ops25->a(b))
+/* pointer to the fuse structure of this translator process */
+extern struct fuse *libfuse_fuse;
+
+#define FUSE_OP_HAVE(a) (libfuse_fuse->op.ops25.a != NULL)
+#define FUSE_OP_CALL(a,b...) (libfuse_fuse->op.ops25.a(b))
 
 #define NN_INFO(dir)   ((void *) &(dir)->nn->info.info25)
 
@@ -135,9 +143,6 @@ struct _libfuse_params {
 };
 
 extern struct _libfuse_params libfuse_params;
-
-/* the private data pointer returned from init() callback */
-extern void *fsys_privdata;
 
 /* magic number, passed from fuse_mount to fuse_new */
 #define FUSE_MAGIC ((int) 0x66757365)

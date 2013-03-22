@@ -47,6 +47,8 @@ extern struct fuse *libfuse_fuse;
 
 #define NN_INFO_APPLY(node,key) (node)->nn->info.info25.key
 
+#define FUSE_SYMVER(x) __asm__(x)
+
 
 extern __thread struct fuse_context *libfuse_ctx;
 

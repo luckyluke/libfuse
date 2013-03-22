@@ -5,7 +5,7 @@
 
 lib_LTLIBRARIES = libfuse.la
 
-libfuse_la_LDFLAGS = -version-number 0:0:1 \
+libfuse_la_LDFLAGS = -version-number 1:0:0 \
 	-Wl,--version-script,$(srcdir)/fuse_versionscript
 libfuse_la_SOURCES = 	\
 	main.c		\

@@ -17,7 +17,7 @@
 #ifdef FUSE_USE_VERSION
 #  include "fuse.h"
 #else
-#  define FUSE_USE_VERSION 25
+#  define FUSE_USE_VERSION 26
 #  include "fuse.h"
 #  include "fuse_compat.h"
 #endif
@@ -32,16 +32,19 @@
 struct fuse {
   int version;
   union {
-    struct fuse_operations ops25;
+    struct fuse_operations_compat25 ops25;
+    struct fuse_operations ops;
   } op;
+  struct fuse_conn_info conn;
+  void *user_data;
   void *private_data;
 };
 
 /* pointer to the fuse structure of this translator process */
 extern struct fuse *libfuse_fuse;
 
-#define FUSE_OP_HAVE(a) (libfuse_fuse->op.ops25.a != NULL)
-#define FUSE_OP_CALL(a,b...) (libfuse_fuse->op.ops25.a(b))
+#define FUSE_OP_HAVE(a) (libfuse_fuse->op.ops.a != NULL)
+#define FUSE_OP_CALL(a,b...) (libfuse_fuse->op.ops.a(b))
 
 #define NN_INFO(dir)   ((void *) &(dir)->nn->info.info25)
 

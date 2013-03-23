@@ -246,14 +246,25 @@ fuse_parse_argv(int argc, char *argv[])
 
 int
 fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
-	       size_t op_size)
+	       size_t op_size, void *user_data)
 {
   fuse_parse_argv(argc, argv);
 
-  int fd = fuse_mount(argv[0], NULL);
+  struct fuse_chan *ch = fuse_mount(argv[0], NULL);
   return (libfuse_params.disable_mt ? fuse_loop : fuse_loop_mt)
-    (fuse_new(fd, NULL, op, op_size));
+    (fuse_new(ch, NULL, op, op_size, user_data));
 }
+
+
+int
+fuse_main_real_compat25(int argc, char *argv[],
+			const struct fuse_operations_compat25 *op,
+			size_t op_size)
+{
+  return fuse_main_real(argc, argv, (const struct fuse_operations *) op,
+			op_size, NULL);
+}
+
 
 #undef fuse_main
 int fuse_main(void);
@@ -268,12 +279,12 @@ int fuse_main(void)
  * on the Hurd. Hmm.
  */
 struct fuse *
-fuse_new(int fd, struct fuse_args *args,
-	 const struct fuse_operations *op, size_t op_size)
+fuse_new(struct fuse_chan *ch, struct fuse_args *args,
+	 const struct fuse_operations *op, size_t op_size, void *user_data)
 {
   struct fuse *new;
 
-  if(fd != FUSE_MAGIC)
+  if(ch != (void *) FUSE_MAGIC)
     return NULL; 
 
   if(args && args->allocated)
@@ -293,6 +304,9 @@ fuse_new(int fd, struct fuse_args *args,
     case sizeof(new->op.ops25):
       new->version = 25;
       break;
+    case sizeof(new->op.ops):
+      new->version = 26;
+      break;
     default:
       fprintf(stderr, "Unhandled size of fuse_operations: %d\n", op_size);
       fprintf(stderr, "libfuse will abort now\n");
@@ -300,18 +314,56 @@ fuse_new(int fd, struct fuse_args *args,
     }
   memcpy(&new->op, op, op_size);
 
-  if(new->op.ops25.init != NULL)
-    new->private_data = new->op.ops25.init();
+  new->user_data = user_data;
+
+  /* FIXME: figure out better values for fuse_conn_info fields.  */
+  new->conn.proto_major = FUSE_MAJOR_VERSION;
+  new->conn.proto_minor = FUSE_MINOR_VERSION;
+  new->conn.async_read = 1;
+  new->conn.max_write = UINT_MAX;
+  new->conn.max_readahead = UINT_MAX;
+
+  if(new->op.ops.init != NULL)
+    {
+    if (new->version >= 26)
+      new->private_data = new->op.ops.init(&new->conn);
+    else
+      new->private_data = new->op.ops25.init();
+    }
 
   return new;
+}
+
+
+struct fuse *
+fuse_new_compat25(int fd, struct fuse_args *args,
+		  const struct fuse_operations_compat25 *op, size_t op_size)
+{
+  return fuse_new((struct fuse_chan *) fd, args,
+		  (const struct fuse_operations *) op, op_size, NULL);
 }
 
 
 /* Create a new mountpoint for our fuse filesystem, i.e. do the netfs
  * initialization stuff ...
  */
-int 
+struct fuse_chan *
 fuse_mount(const char *mountpoint, struct fuse_args *args)
+{
+  if(args && args->allocated)
+    {
+      int i;
+      for(i = 0; i < args->argc; i ++)
+	if(fuse_parse_opt(args->argv[i]))
+	  return NULL;
+    }
+
+  return (struct fuse_chan *) fuse_bootstrap(mountpoint);
+}
+
+
+int
+fuse_mount_compat25(const char *mountpoint, struct fuse_args *args)
 {
   if(args && args->allocated)
     {
@@ -529,3 +581,8 @@ fuse_get_context(void)
 {
   return libfuse_ctx;
 }
+
+
+FUSE_SYMVER(".symver fuse_main_real_compat25,fuse_main_real@FUSE_2.5");
+FUSE_SYMVER(".symver fuse_new_compat25,fuse_new@FUSE_2.5");
+FUSE_SYMVER(".symver fuse_mount_compat25,fuse_mount@FUSE_2.5");

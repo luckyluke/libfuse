@@ -44,7 +44,10 @@ struct fuse {
 extern struct fuse *libfuse_fuse;
 
 #define FUSE_OP_HAVE(a) (libfuse_fuse->op.ops.a != NULL)
-#define FUSE_OP_CALL(a,b...) (libfuse_fuse->op.ops.a(b))
+#define FUSE_OP_CALL(a,b...) ({ \
+  DEBUG("tracing", "FUSE_OP_CALL(%s)\n", #a); \
+  libfuse_fuse->op.ops.a(b); \
+  })
 
 #define NN_INFO(dir)   ((void *) &(dir)->nn->info.info25)
 

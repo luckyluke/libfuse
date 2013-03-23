@@ -191,7 +191,7 @@ error_t netfs_attempt_readlink (struct iouser *user, struct node *node,
     goto out;
 
   if(FUSE_OP_HAVE(readlink))
-    err = -FUSE_OP_CALL(readlink, node->nn->path, buf, INT_MAX);
+    err = -FUSE_OP_CALL(readlink, node->nn->path, buf, node->nn_stat.st_size + 1);
   else
     err = EOPNOTSUPP;
 

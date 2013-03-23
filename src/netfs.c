@@ -1081,7 +1081,7 @@ error_t netfs_attempt_write (struct iouser *cred, struct node *node,
 
   if(FUSE_OP_HAVE(open))
     {
-      err = FUSE_OP_CALL(open, node->nn->path, NN_INFO(node));
+      err = -FUSE_OP_CALL(open, node->nn->path, NN_INFO(node));
 
       if(err) goto out;
     }
@@ -1097,7 +1097,7 @@ error_t netfs_attempt_write (struct iouser *cred, struct node *node,
    * This way we wouldn't be able to report any errors back.
    */
   if(sz >= 0 && FUSE_OP_HAVE(flush))
-    err = FUSE_OP_CALL(flush, node->nn->path, NN_INFO(node));
+    err = -FUSE_OP_CALL(flush, node->nn->path, NN_INFO(node));
 
   if(FUSE_OP_HAVE(open) && FUSE_OP_HAVE(release))
     FUSE_OP_CALL(release, node->nn->path, NN_INFO(node));
@@ -1197,7 +1197,7 @@ error_t netfs_attempt_read (struct iouser *cred, struct node *node,
 
   if(FUSE_OP_HAVE(open))
     {
-      err = FUSE_OP_CALL(open, node->nn->path, NN_INFO(node));
+      err = -FUSE_OP_CALL(open, node->nn->path, NN_INFO(node));
 
       if(err) goto out;
     }
@@ -1213,7 +1213,7 @@ error_t netfs_attempt_read (struct iouser *cred, struct node *node,
    * This way we wouldn't be able to report any errors back.
    */
   if(sz >= 0 && FUSE_OP_HAVE(flush))
-    err = FUSE_OP_CALL(flush, node->nn->path, NN_INFO(node));
+    err = -FUSE_OP_CALL(flush, node->nn->path, NN_INFO(node));
 
   if(FUSE_OP_HAVE(open) && FUSE_OP_HAVE(release))
     FUSE_OP_CALL(release, node->nn->path, NN_INFO(node));
@@ -1550,12 +1550,12 @@ get_dirents_readdir(struct node *dir, int first_entry, int num_entries,
   handle->hdrpos = (struct dirent*) *data;
 
   if(FUSE_OP_HAVE(opendir)
-     && (err = FUSE_OP_CALL(opendir, dir->nn->path, NN_INFO(dir))))
+     && (err = -FUSE_OP_CALL(opendir, dir->nn->path, NN_INFO(dir))))
     goto out;
 
-  if((err = FUSE_OP_CALL(readdir, dir->nn->path, handle, 
-			 get_dirents_readdir_helper,
-			 first_entry, NN_INFO(dir))))
+  if((err = -FUSE_OP_CALL(readdir, dir->nn->path, handle,
+			  get_dirents_readdir_helper,
+			  first_entry, NN_INFO(dir))))
     {
       if(FUSE_OP_HAVE(releasedir))
 	FUSE_OP_CALL(releasedir, dir->nn->path, NN_INFO(dir));
@@ -1563,7 +1563,7 @@ get_dirents_readdir(struct node *dir, int first_entry, int num_entries,
     }
 
   if(FUSE_OP_HAVE(releasedir)
-     && (err = FUSE_OP_CALL(releasedir, dir->nn->path, NN_INFO(dir))))
+     && (err = -FUSE_OP_CALL(releasedir, dir->nn->path, NN_INFO(dir))))
     goto out;
 
   *data_len -= handle->size; /* subtract number of bytes left in the

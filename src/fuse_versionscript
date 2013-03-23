@@ -24,8 +24,6 @@ FUSE_2.2 {
 		fuse_read_cmd;
 		fuse_set_getcontext_func;
 		fuse_setup_compat2;
-		fuse_teardown;
-		fuse_unmount;
 };
 
 FUSE_2.4 {
@@ -66,18 +64,15 @@ FUSE_2.4 {
 
 FUSE_2.5 {
 	global:
-		fuse_lowlevel_new;
 		fuse_lowlevel_new_compat;
-		fuse_main_real;
 		fuse_main_real_compat22;
-		fuse_mount;
 		fuse_mount_compat22;
-		fuse_new;
 		fuse_new_compat22;
 		fuse_opt_parse;
 		fuse_opt_add_opt;
 		fuse_opt_add_arg;
 		fuse_opt_free_args;
+		fuse_opt_insert_arg;
 		fuse_opt_match;
 		fuse_parse_cmdline;
 		fuse_remove_signal_handlers;
@@ -86,10 +81,39 @@ FUSE_2.5 {
 		fuse_reply_open_compat;
 		fuse_reply_statfs;
 		fuse_reply_statfs_compat;
-		fuse_setup;
 		fuse_setup_compat22;
 		fuse_set_signal_handlers;
+} FUSE_2.4;
+
+FUSE_2.6 {
+	global:
+		fuse_add_direntry;
+		fuse_chan_new;
+		fuse_chan_new_compat24;
+		fuse_chan_recv;
+		fuse_daemonize;
+		fuse_get_session;
+		fuse_interrupted;
+		fuse_lowlevel_new;
+		fuse_lowlevel_new_compat25;
+		fuse_main_real;
+		fuse_main_real_compat25;
+		fuse_mount;
+		fuse_mount_compat25;
+		fuse_new;
+		fuse_new_compat25;
+		fuse_opt_insert_arg;
+		fuse_reply_lock;
+		fuse_req_interrupt_func;
+		fuse_req_interrupted;
+		fuse_session_remove_chan;
+		fuse_setup;
+		fuse_setup_compat25;
+		fuse_teardown;
+		fuse_teardown_compat22;
+		fuse_unmount;
+		fuse_unmount_compat22;
 
 	local:
 		 *;
-} FUSE_2.4;
+} FUSE_2.5;

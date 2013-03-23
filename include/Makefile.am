@@ -8,6 +8,7 @@ fuseinclude_HEADERS = \
 	fuse.h \
 	fuse_opt.h \
 	fuse_common.h \
+	fuse_common_compat.h \
 	fuse_compat.h
 
 include_HEADERS = old/fuse.h

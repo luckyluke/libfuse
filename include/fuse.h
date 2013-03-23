@@ -12,9 +12,9 @@
 /* This file defines the library interface of FUSE */
 
 /* IMPORTANT: you should define FUSE_USE_VERSION before including this
-   header.  To use the newest API define it to 25 (recommended for any
-   new application), to use the old API define it to 21 (default) or
-   22, to use the even older 1.X API define it to 11. */
+   header.  To use the newest API define it to 26 (recommended for any
+   new application), to use the old API define it to 21 (default) 22
+   or 25, to use the even older 1.X API define it to 11. */
 
 #ifndef FUSE_USE_VERSION
 #define FUSE_USE_VERSION 21
@@ -22,10 +22,12 @@
 
 #include "fuse_common.h"
 
+#include <fcntl.h>
+#include <time.h>
+#include <utime.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
-#include <utime.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -67,9 +69,9 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
  *
  * All methods are optional, but some are essential for a useful
  * filesystem (e.g. getattr).  Open, flush, release, fsync, opendir,
- * releasedir, fsyncdir, access, create, ftruncate, fgetattr, init and
- * destroy are special purpose methods, without which a full featured
- * filesystem can still be implemented.
+ * releasedir, fsyncdir, access, create, ftruncate, fgetattr, lock,
+ * init and destroy are special purpose methods, without which a full
+ * featured filesystem can still be implemented.
  */
 struct fuse_operations {
     /** Get file attributes.
@@ -95,8 +97,9 @@ struct fuse_operations {
 
     /** Create a file node
      *
-     * There is no create() operation, mknod() will be called for
-     * creation of all non-directory, non-symlink nodes.
+     * If the filesystem doesn't define a create() operation, mknod()
+     * will be called for creation of all non-directory, non-symlink
+     * nodes.
      */
     int (*mknod) (const char *, mode_t, dev_t);
 
@@ -127,7 +130,10 @@ struct fuse_operations {
     /** Change the size of a file */
     int (*truncate) (const char *, off_t);
 
-    /** Change the access and/or modification times of a file */
+    /** Change the access and/or modification times of a file
+     *
+     * Deprecated, use utimes() instead.
+     */
     int (*utime) (const char *, struct utimbuf *);
 
     /** File open operation
@@ -166,7 +172,6 @@ struct fuse_operations {
     int (*write) (const char *, const char *, size_t, off_t,
                   struct fuse_file_info *);
 
-    /** Just a placeholder, don't set */
     /** Get file system statistics
      *
      * The 'f_frsize', 'f_favail', 'f_fsid' and 'f_flag' fields are ignored
@@ -294,8 +299,9 @@ struct fuse_operations {
      * destroy() method.
      *
      * Introduced in version 2.3
+     * Changed in version 2.6
      */
-    void *(*init) (void);
+    void *(*init) (struct fuse_conn_info *conn);
 
     /**
      * Clean up filesystem
@@ -360,6 +366,59 @@ struct fuse_operations {
      * Introduced in version 2.5
      */
     int (*fgetattr) (const char *, struct stat *, struct fuse_file_info *);
+
+    /**
+     * Perform POSIX file locking operation
+     *
+     * The cmd argument will be either F_GETLK, F_SETLK or F_SETLKW.
+     *
+     * For the meaning of fields in 'struct flock' see the man page
+     * for fcntl(2).  The l_whence field will always be set to
+     * SEEK_SET.
+     *
+     * For checking lock ownership, the 'fuse_file_info->owner'
+     * argument must be used.
+     *
+     * For F_GETLK operation, the library will first check currently
+     * held locks, and if a conflicting lock is found it will return
+     * information without calling this method.  This ensures, that
+     * for local locks the l_pid field is correctly filled in.  The
+     * results may not be accurate in case of race conditions and in
+     * the presence of hard links, but it's unlikly that an
+     * application would rely on accurate GETLK results in these
+     * cases.  If a conflicting lock is not found, this method will be
+     * called, and the filesystem may fill out l_pid by a meaningful
+     * value, or it may leave this field zero.
+     *
+     * For F_SETLK and F_SETLKW the l_pid field will be set to the pid
+     * of the process performing the locking operation.
+     *
+     * Note: if this method is not implemented, the kernel will still
+     * allow file locking to work locally.  Hence it is only
+     * interesting for network filesystems and similar.
+     *
+     * Introduced in version 2.6
+     */
+    int (*lock) (const char *, struct fuse_file_info *, int cmd,
+                 struct flock *);
+
+    /**
+     * Change the access and modification times of a file with
+     * nanosecond resolution
+     *
+     * Introduced in version 2.6
+     */
+    int (*utimens) (const char *, const struct timespec tv[2]);
+
+    /**
+     * Map block index within file to block index within device
+     *
+     * Note: This makes sense only for block device backed filesystems
+     * mounted with the 'blkdev' option
+     *
+     * Introduced in version 2.6
+     */
+    int (*bmap) (const char *, size_t blocksize, uint64_t *idx);
 };
 
 /** Extra context that may be needed by some filesystems
@@ -404,13 +463,15 @@ struct fuse_context {
  * @param argc the argument counter passed to the main() function
  * @param argv the argument vector passed to the main() function
  * @param op the file system operation
+ * @param user_data user data set in context for init() method
  * @return 0 on success, nonzero on failure
  */
 /*
-int fuse_main(int argc, char *argv[], const struct fuse_operations *op);
+int fuse_main(int argc, char *argv[], const struct fuse_operations *op,
+              void *user_data);
 */
-#define fuse_main(argc, argv, op) \
-            fuse_main_real(argc, argv, op, sizeof(*(op)))
+#define fuse_main(argc, argv, op, user_data) \
+            fuse_main_real(argc, argv, op, sizeof(*(op)), user_data)
 
 /* ----------------------------------------------------------- *
  * More detailed API                                           *
@@ -419,19 +480,24 @@ int fuse_main(int argc, char *argv[], const struct fuse_operations *op);
 /**
  * Create a new FUSE filesystem.
  *
- * @param fd the control file descriptor
+ * @param ch the communication channel
  * @param args argument vector
  * @param op the operations
  * @param op_size the size of the fuse_operations structure
+ * @param user_data user data set in context for init() method
  * @return the created FUSE handle
  */
-struct fuse *fuse_new(int fd, struct fuse_args *args,
-                      const struct fuse_operations *op, size_t op_size);
+struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
+                      const struct fuse_operations *op, size_t op_size,
+                      void *user_data);
 
 /**
  * Destroy the FUSE handle.
  *
- * The filesystem is not unmounted.
+ * The communication channel attached to the handle is also destroyed.
+ *
+ * NOTE: This function does not unmount the filesystem.  If this is
+ * needed, call fuse_unmount() before calling this function.
  *
  * @param f the FUSE handle
  */
@@ -476,10 +542,17 @@ int fuse_loop_mt(struct fuse *f);
  * The context is only valid for the duration of a filesystem
  * operation, and thus must not be stored and used later.
  *
- * @param f the FUSE handle
  * @return the context
  */
 struct fuse_context *fuse_get_context(void);
+
+/**
+ * Check if a request has already been interrupted
+ *
+ * @param req request handle
+ * @return 1 if the request has been interrupted, 0 otherwise
+ */
+int fuse_interrupted(void);
 
 /**
  * Obsolete, doesn't do anything
@@ -497,11 +570,14 @@ int fuse_is_lib_option(const char *opt);
  * Do not call this directly, use fuse_main()
  */
 int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
-                   size_t op_size);
+                   size_t op_size, void *user_data);
 
 /* ----------------------------------------------------------- *
  * Advanced API for event handling, don't worry about this...  *
  * ----------------------------------------------------------- */
+
+/* NOTE: the following functions are deprecated, and will be removed
+   from the 3.0 API.  Use the lowlevel session functions instead */
 
 /** Function type used to process commands */
 typedef void (*fuse_processor_t)(struct fuse *, struct fuse_cmd *, void *);
@@ -509,10 +585,11 @@ typedef void (*fuse_processor_t)(struct fuse *, struct fuse_cmd *, void *);
 /** This is the part of fuse_main() before the event loop */
 struct fuse *fuse_setup(int argc, char *argv[],
                         const struct fuse_operations *op, size_t op_size,
-                          char **mountpoint, int *multithreaded, int *fd);
+                        char **mountpoint, int *multithreaded,
+                        void *user_data);
 
 /** This is the part of fuse_main() after the event loop */
-void fuse_teardown(struct fuse *fuse, int fd, char *mountpoint);
+void fuse_teardown(struct fuse *fuse, char *mountpoint);
 
 /** Read a single command.  If none are read, return NULL */
 struct fuse_cmd *fuse_read_cmd(struct fuse *f);
@@ -528,67 +605,58 @@ int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data);
     called */
 int fuse_exited(struct fuse *f);
 
-/** Set function which can be used to get the current context */
+/** This function is obsolete and implemented as a no-op */
 void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
+
+/** Get session from fuse object */
+struct fuse_session *fuse_get_session(struct fuse *f);
 
 /* ----------------------------------------------------------- *
  * Compatibility stuff                                         *
  * ----------------------------------------------------------- */
 
-#ifndef __FreeBSD__
-
-#if FUSE_USE_VERSION == 22 || FUSE_USE_VERSION == 21 || FUSE_USE_VERSION == 11
+#if FUSE_USE_VERSION < 26
 #  include "fuse_compat.h"
-#  undef FUSE_MINOR_VERSION
 #  undef fuse_main
-#  if FUSE_USE_VERSION == 22
-#    define FUSE_MINOR_VERSION 4
+#  if FUSE_USE_VERSION == 25
+#    define fuse_main(argc, argv, op) \
+            fuse_main_real_compat25(argc, argv, op, sizeof(*(op)))
+#    define fuse_new fuse_new_compat25
+#    define fuse_setup fuse_setup_compat25
+#    define fuse_teardown fuse_teardown_compat22
+#    define fuse_operations fuse_operations_compat25
+#  elif FUSE_USE_VERSION == 22
 #    define fuse_main(argc, argv, op) \
             fuse_main_real_compat22(argc, argv, op, sizeof(*(op)))
 #    define fuse_new fuse_new_compat22
 #    define fuse_setup fuse_setup_compat22
+#    define fuse_teardown fuse_teardown_compat22
 #    define fuse_operations fuse_operations_compat22
-#    define fuse_file_info fuse_file_info_compat22
-#    define fuse_mount fuse_mount_compat22
+#    define fuse_file_info fuse_file_info_compat
+#  elif FUSE_USE_VERSION == 24
+#    error Compatibility with high-level API version 24 not supported
 #  else
-#  define fuse_dirfil_t fuse_dirfil_t_compat
-#  define __fuse_read_cmd fuse_read_cmd
-#  define __fuse_process_cmd fuse_process_cmd
-#  define __fuse_loop_mt fuse_loop_mt_proc
-#  if FUSE_USE_VERSION == 21
-#    define FUSE_MINOR_VERSION 1
-#    define fuse_operations fuse_operations_compat2
-#    define fuse_main fuse_main_compat2
-#    define fuse_new fuse_new_compat2
-#    define __fuse_setup fuse_setup_compat2
-#    define __fuse_teardown fuse_teardown
-#    define __fuse_exited fuse_exited
-#    define __fuse_set_getcontext_func fuse_set_getcontext_func
-#      define fuse_mount fuse_mount_compat22
-#  else
-#      warning Compatibility with API version 11 is deprecated
-#      undef FUSE_MAJOR_VERSION
-#    define FUSE_MAJOR_VERSION 1
-#    define FUSE_MINOR_VERSION 1
-#    define fuse_statfs fuse_statfs_compat1
-#    define fuse_operations fuse_operations_compat1
-#    define fuse_main fuse_main_compat1
-#    define fuse_new fuse_new_compat1
-#    define fuse_mount fuse_mount_compat1
-#    define FUSE_DEBUG FUSE_DEBUG_COMPAT1
+#    define fuse_dirfil_t fuse_dirfil_t_compat
+#    define __fuse_read_cmd fuse_read_cmd
+#    define __fuse_process_cmd fuse_process_cmd
+#    define __fuse_loop_mt fuse_loop_mt_proc
+#    if FUSE_USE_VERSION == 21
+#      define fuse_operations fuse_operations_compat2
+#      define fuse_main fuse_main_compat2
+#      define fuse_new fuse_new_compat2
+#      define __fuse_setup fuse_setup_compat2
+#      define __fuse_teardown fuse_teardown_compat22
+#      define __fuse_exited fuse_exited
+#      define __fuse_set_getcontext_func fuse_set_getcontext_func
+#    else
+#      define fuse_statfs fuse_statfs_compat1
+#      define fuse_operations fuse_operations_compat1
+#      define fuse_main fuse_main_compat1
+#      define fuse_new fuse_new_compat1
+#      define FUSE_DEBUG FUSE_DEBUG_COMPAT1
+#    endif
 #  endif
-#  endif
-#elif FUSE_USE_VERSION < 25
-#  error Compatibility with API version other than 21, 22 and 11 not supported
 #endif
-
-#else /* __FreeBSD__ */
-
-#if FUSE_USE_VERSION < 25
-#  error On FreeBSD API version 25 or greater must be used
-#endif
-
-#endif /* __FreeBSD__ */
 
 #ifdef __cplusplus
 }

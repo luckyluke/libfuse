@@ -193,9 +193,9 @@ void fuse_remove_signal_handlers(struct fuse_session *se);
  * ----------------------------------------------------------- */
 
 #if FUSE_USE_VERSION < 26
-#    ifdef __FreeBSD__
+#    if defined(__FreeBSD__) || defined(__GNU__)
 #        if FUSE_USE_VERSION < 25
-#            error On FreeBSD API version 25 or greater must be used
+#            error On FreeBSD and Hurd API version 25 or greater must be used
 #        endif
 #    endif
 #    include "fuse_common_compat.h"

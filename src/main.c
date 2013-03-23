@@ -583,6 +583,16 @@ fuse_get_context(void)
 }
 
 
+int
+fuse_invalidate(struct fuse *f, const char *path)
+{
+  (void) f;
+  (void) path;
+
+  return -EINVAL;
+}
+
+
 FUSE_SYMVER(".symver fuse_main_real_compat25,fuse_main_real@FUSE_2.5");
 FUSE_SYMVER(".symver fuse_new_compat25,fuse_new@FUSE_2.5");
 FUSE_SYMVER(".symver fuse_mount_compat25,fuse_mount@FUSE_2.5");

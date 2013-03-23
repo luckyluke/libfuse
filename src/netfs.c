@@ -1128,29 +1128,46 @@ netfs_attempt_utimes (struct iouser *cred, struct node *node,
 	 && (err = fshelp_isowner(&node->nn_stat, cred))))
     goto out;
 
-  if(! FUSE_OP_HAVE(utime)) 
+  if(FUSE_OP_HAVE(utimens))
     {
-      err = EOPNOTSUPP;
-      goto out;
+      /* Prepare TS for FUSE_OP_HAVE(utimens) call.  */
+      struct timespec ts[2];
+      ts[0] = atime ? *atime : node->nn_stat.st_atim;
+      ts[1] = mtime ? *mtime : node->nn_stat.st_mtim;
+
+      err = -FUSE_OP_CALL(utimens, node->nn->path, ts);
+
+      if (!err)
+	{
+	  node->nn_stat.st_mtim = ts[1];
+
+	  node->nn_stat.st_atim = ts[0];
+
+	  node->nn->may_need_sync = 1;
+	}
     }
-
-  /* prepare utimebuf for FUSE_OP_HAVE(utime) call */
-  struct utimbuf utb;
-  utb.actime = atime ? atime->tv_sec : node->nn_stat.st_atime;
-  utb.modtime = mtime ? mtime->tv_sec : node->nn_stat.st_mtime;
-
-  err = -FUSE_OP_CALL(utime, node->nn->path, &utb);
-
-  if (! err)
+  else if(FUSE_OP_HAVE(utime))
     {
-      node->nn_stat.st_mtim.tv_sec = utb.modtime;
-      node->nn_stat.st_mtim.tv_nsec = 0;
-      
-      node->nn_stat.st_atim.tv_sec = utb.actime;
-      node->nn_stat.st_atim.tv_nsec = 0;
-	
-      node->nn->may_need_sync = 1;
+      /* Prepare UTB for FUSE_OP_HAVE(utime) call.  */
+      struct utimbuf utb;
+      utb.actime = atime ? atime->tv_sec : node->nn_stat.st_atime;
+      utb.modtime = mtime ? mtime->tv_sec : node->nn_stat.st_mtime;
+
+      err = -FUSE_OP_CALL(utime, node->nn->path, &utb);
+
+      if (!err)
+	{
+	  node->nn_stat.st_mtim.tv_sec = utb.modtime;
+	  node->nn_stat.st_mtim.tv_nsec = 0;
+
+	  node->nn_stat.st_atim.tv_sec = utb.actime;
+	  node->nn_stat.st_atim.tv_nsec = 0;
+
+	  node->nn->may_need_sync = 1;
+	}
     }
+  else
+    err = EOPNOTSUPP;
 
  out:
   FUNC_EPILOGUE(err);

@@ -6,3 +6,6 @@
 override_dh_auto_clean:
 	dh_auto_clean
 	rm -f example*/Makefile
+
+override_dh_installchangelogs:
+	dh_installchangelogs -XChangeLog

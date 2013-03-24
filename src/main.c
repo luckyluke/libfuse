@@ -314,14 +314,15 @@ fuse_new(struct fuse_chan *ch, struct fuse_args *args,
     }
   memcpy(&new->op, op, op_size);
 
-  new->user_data = user_data;
-
   /* FIXME: figure out better values for fuse_conn_info fields.  */
   new->conn.proto_major = FUSE_MAJOR_VERSION;
   new->conn.proto_minor = FUSE_MINOR_VERSION;
   new->conn.async_read = 1;
   new->conn.max_write = UINT_MAX;
   new->conn.max_readahead = UINT_MAX;
+
+  update_context_struct(NULL, new);
+  libfuse_ctx->private_data = user_data;
 
   if(new->op.ops.init != NULL)
     {
@@ -330,6 +331,8 @@ fuse_new(struct fuse_chan *ch, struct fuse_args *args,
     else
       new->private_data = new->op.ops25.init();
     }
+
+  update_context_struct(NULL, NULL);
 
   return new;
 }

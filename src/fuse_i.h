@@ -22,6 +22,8 @@
 #  include "fuse_compat.h"
 #endif
 
+struct iouser;
+
 /* write out message to stderr, that some routine is not yet implemented,
  * thus misbehaviour must be accepted. */
 #define NOT_IMPLEMENTED() \
@@ -36,7 +38,6 @@ struct fuse {
     struct fuse_operations ops;
   } op;
   struct fuse_conn_info conn;
-  void *user_data;
   void *private_data;
 };
 
@@ -57,6 +58,8 @@ extern struct fuse *libfuse_fuse;
 
 
 extern __thread struct fuse_context *libfuse_ctx;
+
+extern void update_context_struct(struct iouser *cred, struct fuse *fuse);
 
 /*****************************************************************************
  *** netnodes (in memory representation of libfuse's files or directories) ***

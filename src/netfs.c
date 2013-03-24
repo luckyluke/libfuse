@@ -54,6 +54,12 @@ struct fuse_dirhandle {
 static inline void
 refresh_context_struct(struct iouser *cred)
 {
+  update_context_struct(cred, libfuse_fuse);
+}
+
+void
+update_context_struct(struct iouser *cred, struct fuse *fuse)
+{
   FUNC_PROLOGUE("refresh_context_struct");
   struct fuse_context *ctx = libfuse_ctx;
   
@@ -68,13 +74,13 @@ refresh_context_struct(struct iouser *cred)
 
       libfuse_ctx = ctx;
 
-      ctx->fuse = libfuse_fuse;
-      ctx->private_data = libfuse_fuse->private_data;
-      
       /* FIXME, how to figure out the pid of the program asking for the
        * filesystem operation? */
       ctx->pid = 0;
     }
+
+  ctx->fuse = fuse;
+  ctx->private_data = ctx->fuse ? ctx->fuse->private_data : NULL;
 
   if(cred)
     {

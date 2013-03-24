@@ -1,3 +1,8 @@
+hurd-libfuse (0.0.20130220-2) UNRELEASED; urgency=low
+
+
+ -- GNU Hurd Maintainers <debian-hurd@lists.debian.org>  Sun, 24 Mar 2013 21:42:52 +0100
+
 hurd-libfuse (0.0.20130220-1) unstable; urgency=low
 
   * New upstream snapshot, building against libpthread.

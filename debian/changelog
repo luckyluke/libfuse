@@ -4,6 +4,8 @@ hurd-libfuse (0.0.20130220-2) UNRELEASED; urgency=low
   * Make use of the debhelper compatibility 9:
     - bump compat to 9
     - bump the debhelper build dependency to >= 9
+    - rules: stop specifying manually the --libdir to configure, as
+      dh_auto_configure handles that on its own
 
  -- GNU Hurd Maintainers <debian-hurd@lists.debian.org>  Sun, 24 Mar 2013 21:42:52 +0100
 

@@ -6,6 +6,9 @@ hurd-libfuse (0.0.20130220-2) UNRELEASED; urgency=low
     - bump the debhelper build dependency to >= 9
     - rules: stop specifying manually the --libdir to configure, as
       dh_auto_configure handles that on its own
+    - remove the hardening-wrapper build dependency and DEB_BUILD_HARDENING=1
+      in rules, since dh_auto_configure export the right *FLAGS variables
+      from dpkg-buildflags (which include the basic hardening flags)
 
  -- GNU Hurd Maintainers <debian-hurd@lists.debian.org>  Sun, 24 Mar 2013 21:42:52 +0100
 

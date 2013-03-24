@@ -9,6 +9,8 @@ hurd-libfuse (0.0.20130220-2) UNRELEASED; urgency=low
     - remove the hardening-wrapper build dependency and DEB_BUILD_HARDENING=1
       in rules, since dh_auto_configure export the right *FLAGS variables
       from dpkg-buildflags (which include the basic hardening flags)
+  * Rename docs to libfuse-hurd0.docs, and do not install NEWS for now
+    (no useful content in it)
 
  -- GNU Hurd Maintainers <debian-hurd@lists.debian.org>  Sun, 24 Mar 2013 21:42:52 +0100
 

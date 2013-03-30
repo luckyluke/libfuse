@@ -61,24 +61,8 @@ void
 update_context_struct(struct iouser *cred, struct fuse *fuse)
 {
   FUNC_PROLOGUE("refresh_context_struct");
-  struct fuse_context *ctx = libfuse_ctx;
+  struct fuse_context *ctx = fuse_get_context();
   
-  if(! ctx) 
-    {
-      ctx = malloc(sizeof(struct fuse_context));
-      if(! ctx) 
-	{
-	  perror(PACKAGE_NAME);
-	  return;
-	}
-
-      libfuse_ctx = ctx;
-
-      /* FIXME, how to figure out the pid of the program asking for the
-       * filesystem operation? */
-      ctx->pid = 0;
-    }
-
   ctx->fuse = fuse;
   ctx->private_data = ctx->fuse ? ctx->fuse->private_data : NULL;
 

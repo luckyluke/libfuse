@@ -57,8 +57,6 @@ extern struct fuse *libfuse_fuse;
 #define FUSE_SYMVER(x) __asm__(x)
 
 
-extern __thread struct fuse_context *libfuse_ctx;
-
 extern void update_context_struct(struct iouser *cred, struct fuse *fuse);
 
 /*****************************************************************************

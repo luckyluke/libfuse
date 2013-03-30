@@ -35,13 +35,33 @@ struct _libfuse_params libfuse_params = { 0 };
 /* pointer to the fuse structure of this translator process */
 struct fuse *libfuse_fuse = NULL;
 
-__thread struct fuse_context *libfuse_ctx;
+/* the key for the fuse_context */
+static pthread_key_t libfuse_ctx_key;
 
 /* the port where to write out debug messages to, NULL to omit these */
 FILE *debug_port = NULL;
 
 /* bootstrap fuse translator */
 static int fuse_bootstrap(const char *mountpoint);
+
+
+/* Destroy the fuse_context held as TSD.
+ */
+static void
+fuse_destroy_context(void *data)
+{
+  free(data);
+}
+
+
+/* Create the TSD key.
+ */
+static void
+fuse_create_key(void)
+{
+  int err = pthread_key_create(&libfuse_ctx_key, fuse_destroy_context);
+  assert_perror(err);
+}
 
 
 /* Interpret a __single__ mount option 
@@ -322,7 +342,7 @@ fuse_new(struct fuse_chan *ch, struct fuse_args *args,
   new->conn.max_readahead = UINT_MAX;
 
   update_context_struct(NULL, new);
-  libfuse_ctx->private_data = user_data;
+  fuse_get_context()->private_data = user_data;
 
   if(new->op.ops.init != NULL)
     {
@@ -582,7 +602,26 @@ fuse_exited(struct fuse *f)
 struct fuse_context *
 fuse_get_context(void)
 {
-  return libfuse_ctx;
+  static pthread_once_t libfuse_ctx_key_once = PTHREAD_ONCE_INIT;
+
+  pthread_once(&libfuse_ctx_key_once, fuse_create_key);
+
+  struct fuse_context *ctx = pthread_getspecific(libfuse_ctx_key);
+
+  if(! ctx)
+    {
+      ctx = calloc(1, sizeof(*ctx));
+      if(! ctx)
+	{
+	  fprintf(stderr, "Cannot allocate a new fuse_context\n");
+	  fprintf(stderr, "libfuse will abort now\n");
+	  abort();
+	}
+
+      pthread_setspecific(libfuse_ctx_key, ctx);
+    }
+
+  return ctx;
 }
 
 

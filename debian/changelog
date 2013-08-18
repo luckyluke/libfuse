@@ -13,6 +13,7 @@ hurd-libfuse (0.0.20130220-2) UNRELEASED; urgency=low
     (no useful content in it)
   * Do not install the upstream ChangeLog, since all it does is pointing to the
     VCS history.
+  * Update Vcs-* headers.
 
  -- GNU Hurd Maintainers <debian-hurd@lists.debian.org>  Sun, 24 Mar 2013 21:42:52 +0100
 

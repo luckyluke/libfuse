@@ -15,7 +15,7 @@ hurd-libfuse (0.0.20130220-2) UNRELEASED; urgency=low
     VCS history.
   * Update Vcs-* headers.
   * Bump Standards-Version to 3.9.4, no changes required.
-  * Update Homepage.
+  * Update upstream URL in Homepage and copyright.
 
  -- GNU Hurd Maintainers <debian-hurd@lists.debian.org>  Sun, 24 Mar 2013 21:42:52 +0100
 

@@ -4,7 +4,7 @@ Priority: extra
 Maintainer: GNU Hurd Maintainers <debian-hurd@lists.debian.org>
 Uploaders: Samuel Thibault <sthibault@debian.org>
 Build-Depends: debhelper (>= 9), dh-autoreconf
-Standards-Version: 3.9.3
+Standards-Version: 3.9.4
 Homepage: http://www.gnu.org/software/hurd/hurd/translator/libfuse.html
 Vcs-Git: git://anonscm.debian.org/pkg-hurd/libfuse.git
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=pkg-hurd/libfuse.git

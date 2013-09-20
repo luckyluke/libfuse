@@ -12,6 +12,7 @@ Vcs-Browser: http://anonscm.debian.org/gitweb/?p=pkg-hurd/libfuse.git
 Package: libfuse-hurd-dev
 Architecture: hurd-any
 Section: libdevel
+Multi-Arch: same
 Depends: ${shlibs:Depends}, ${misc:Depends}, libfuse-hurd0 (= ${binary:Version})
 Provides: libfuse-dev
 Description: Hurd-based FUSE API library - development files

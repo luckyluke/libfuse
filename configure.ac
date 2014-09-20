@@ -25,7 +25,7 @@ fi
 
 # Checks for libraries.
 AC_CHECK_LIB([pthread], [pthread_rwlock_init])
-AC_CHECK_LIB([ports], [hurd_ihash_init])
+AC_CHECK_LIB([ports], [ports_create_port])
 AC_CHECK_LIB([fshelp], [fshelp_touch])
 AC_CHECK_LIB([iohelp], [iohelp_initialize_conch])
 #AC_CHECK_LIB([netfs], [netfs_startup])

@@ -9,6 +9,7 @@ hurd-libfuse (0.0.20140820-0r1) UNRELEASED; urgency=medium
     implements (taken from the pkg-config file), which depends on
     libfuse-hurd-dev. This allows libfuse-hurd-dev to satisfy versioned
     libfuse-dev (build-)dependencies.
+  * Remove extra ${shlibs:Depends} from libfuse-hurd-dev.
 
  -- GNU Hurd Maintainers <debian-hurd@lists.debian.org>  Sat, 20 Sep 2014 10:55:52 +0200
 

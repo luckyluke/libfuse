@@ -1,10 +1,14 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2004  Miklos Szeredi <miklos@szeredi.hu>
+    Copyright (C) 2001-2006  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
+
+    gcc -Wall `pkg-config fuse --cflags --libs` null.c -o null
 */
+
+#define FUSE_USE_VERSION 26
 
 #include <fuse.h>
 #include <string.h>
@@ -12,13 +16,11 @@
 #include <time.h>
 #include <errno.h>
 
-#define UNUSED(x) x __attribute__((unused))
-
 static int null_getattr(const char *path, struct stat *stbuf)
 {
     if(strcmp(path, "/") != 0)
         return -ENOENT;
-    
+
     stbuf->st_mode = S_IFREG | 0644;
     stbuf->st_nlink = 1;
     stbuf->st_uid = getuid();
@@ -30,34 +32,46 @@ static int null_getattr(const char *path, struct stat *stbuf)
     return 0;
 }
 
-static int null_truncate(const char *path, off_t UNUSED(size))
+static int null_truncate(const char *path, off_t size)
 {
+    (void) size;
+
     if(strcmp(path, "/") != 0)
         return -ENOENT;
 
     return 0;
 }
 
-static int null_open(const char *path, int UNUSED(flags))
+static int null_open(const char *path, struct fuse_file_info *fi)
 {
+    (void) fi;
+
     if(strcmp(path, "/") != 0)
         return -ENOENT;
 
     return 0;
 }
 
-static int null_read(const char *path, char *UNUSED(buf), size_t size,
-                     off_t UNUSED(offset))
+static int null_read(const char *path, char *buf, size_t size,
+                     off_t offset, struct fuse_file_info *fi)
 {
+    (void) buf;
+    (void) offset;
+    (void) fi;
+
     if(strcmp(path, "/") != 0)
         return -ENOENT;
 
     return size;
 }
 
-static int null_write(const char *path, const char *UNUSED(buf), size_t size,
-                     off_t UNUSED(offset))
+static int null_write(const char *path, const char *buf, size_t size,
+                     off_t offset, struct fuse_file_info *fi)
 {
+    (void) buf;
+    (void) offset;
+    (void) fi;
+
     if(strcmp(path, "/") != 0)
         return -ENOENT;
 
@@ -74,6 +88,5 @@ static struct fuse_operations null_oper = {
 
 int main(int argc, char *argv[])
 {
-    fuse_main(argc, argv, &null_oper);
-    return 0;
+    return fuse_main(argc, argv, &null_oper, NULL);
 }

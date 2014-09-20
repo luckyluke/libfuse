@@ -40,10 +40,7 @@ CFLAGS="$CFLAGS -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -Wall -W -ggdb"
 # Checks for library functions.
 
 AC_CONFIG_FILES([fuse.pc Makefile]
-		[include/Makefile include/old/Makefile src/Makefile]
-		[example/Makefile 
-		 example-22/Makefile 
-		 example-23/Makefile
-		 example-24/Makefile
-		 example-25/Makefile])
+		[include/Makefile src/Makefile]
+		[example-25/Makefile
+		 example-26/Makefile])
 AC_OUTPUT

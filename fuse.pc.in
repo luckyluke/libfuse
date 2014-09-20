@@ -5,6 +5,7 @@ includedir=@includedir@
 
 Name: fuse
 Description: Filesystem in Userspace
-Version: 2.5.3
-Libs: -L${libdir} -lfuse -lpthread
+Version: 2.6.5
+Libs: -L${libdir} -lfuse
+Libs.private: -lpthread
 Cflags: -I${includedir}/fuse -D_FILE_OFFSET_BITS=64

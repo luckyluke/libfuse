@@ -17,10 +17,12 @@
 #ifdef FUSE_USE_VERSION
 #  include "fuse.h"
 #else
-#  define FUSE_USE_VERSION 25
+#  define FUSE_USE_VERSION 26
 #  include "fuse.h"
 #  include "fuse_compat.h"
 #endif
+
+struct iouser;
 
 /* write out message to stderr, that some routine is not yet implemented,
  * thus misbehaviour must be accepted. */
@@ -29,43 +31,33 @@
 	    __FILE__ ":%d\nyou're welcome to put your effort to here.\n\n", \
 	    __LINE__)
 
-/* pointer to the fuse_operations structure of this translator process */
-extern const struct fuse_operations_compat22 *fuse_ops_compat22;
-extern const struct fuse_operations_compat2 *fuse_ops_compat2;
-extern const struct fuse_operations *fuse_ops25;
+struct fuse {
+  int version;
+  union {
+    struct fuse_operations_compat25 ops25;
+    struct fuse_operations ops;
+  } op;
+  struct fuse_conn_info conn;
+  void *private_data;
+};
 
-#define FUSE_OP_HAVE(a) (fuse_ops25 ? \
-			 (fuse_ops25->a != NULL) \
-			 : ((fuse_ops_compat22) ? \
-			    (fuse_ops_compat22->a != NULL) :	\
-			    (fuse_ops_compat2->a != NULL)))
-#define FUSE_OP_CALL(a,b...) (fuse_ops25 ? \
-			      (fuse_ops25->a(b)) : \
-			      ((fuse_ops_compat22) ?	   \
-                               (fuse_ops_compat22->a(b)) : \
-                               (fuse_ops_compat2->a(b))))
+/* pointer to the fuse structure of this translator process */
+extern struct fuse *libfuse_fuse;
 
-#define FUSE_OP_HAVE22(a) (fuse_ops25 ? \
-			   (fuse_ops25->a != NULL)	\
-			   : ((fuse_ops_compat22) ?		\
-			      (fuse_ops_compat22->a != NULL) : 0))
+#define FUSE_OP_HAVE(a) (libfuse_fuse->op.ops.a != NULL)
+#define FUSE_OP_CALL(a,b...) ({ \
+  DEBUG("tracing", "FUSE_OP_CALL(%s)\n", #a); \
+  libfuse_fuse->op.ops.a(b); \
+  })
 
-#define FUSE_OP_CALL22(a,b...) (fuse_ops25 ? \
-				(fuse_ops25->a(b)) :	   \
-				((fuse_ops_compat22) ?	   \
-				 (fuse_ops_compat22->a(b)) : (0)))
+#define NN_INFO(dir)   ((void *) &(dir)->nn->info.info25)
 
-#define NN_INFO(dir)   (fuse_ops25 ?				\
-			((void *) &(dir)->nn->info.info25)	\
-			: ((void *) &(dir)->nn->info.compat22))
+#define NN_INFO_APPLY(node,key) (node)->nn->info.info25.key
 
-#define NN_INFO_APPLY(node,key) do {		\
-    if(fuse_ops25) (node)->nn->info.info25.key;	\
-    else (node)->nn->info.compat22.key;		\
-  } while(0)
+#define FUSE_SYMVER(x) __asm__(x)
 
 
-extern __thread struct fuse_context *libfuse_ctx;
+extern void update_context_struct(struct iouser *cred, struct fuse *fuse);
 
 /*****************************************************************************
  *** netnodes (in memory representation of libfuse's files or directories) ***
@@ -83,7 +75,6 @@ struct netnode {
   /* information about the opened file
    */
   union {
-    struct fuse_file_info_compat22 compat22;
     struct fuse_file_info info25;
   } info;
 
@@ -161,9 +152,6 @@ struct _libfuse_params {
 };
 
 extern struct _libfuse_params libfuse_params;
-
-/* the private data pointer returned from init() callback */
-extern void *fsys_privdata;
 
 /* magic number, passed from fuse_mount to fuse_new */
 #define FUSE_MAGIC ((int) 0x66757365)

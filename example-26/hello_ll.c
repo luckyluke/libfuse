@@ -1,10 +1,14 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2005  Miklos Szeredi <miklos@szeredi.hu>
+    Copyright (C) 2001-2006  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
+
+    gcc -Wall `pkg-config fuse --cflags --libs` hello_ll.c -o hello_ll
 */
+
+#define FUSE_USE_VERSION 26
 
 #include <fuse_lowlevel.h>
 #include <stdio.h>
@@ -75,15 +79,17 @@ struct dirbuf {
     size_t size;
 };
 
-static void dirbuf_add(struct dirbuf *b, const char *name, fuse_ino_t ino)
+static void dirbuf_add(fuse_req_t req, struct dirbuf *b, const char *name,
+                       fuse_ino_t ino)
 {
     struct stat stbuf;
     size_t oldsize = b->size;
-    b->size += fuse_dirent_size(strlen(name));
+    b->size += fuse_add_direntry(req, NULL, 0, name, NULL, 0);
     b->p = (char *) realloc(b->p, b->size);
     memset(&stbuf, 0, sizeof(stbuf));
     stbuf.st_ino = ino;
-    fuse_add_dirent(b->p + oldsize, name, &stbuf, b->size);
+    fuse_add_direntry(req, b->p + oldsize, b->size - oldsize, name, &stbuf,
+                      b->size);
 }
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
@@ -108,9 +114,9 @@ static void hello_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
         struct dirbuf b;
 
         memset(&b, 0, sizeof(b));
-        dirbuf_add(&b, ".", 1);
-        dirbuf_add(&b, "..", 1);
-        dirbuf_add(&b, hello_name, 2);
+        dirbuf_add(req, &b, ".", 1);
+        dirbuf_add(req, &b, "..", 1);
+        dirbuf_add(req, &b, hello_name, 2);
         reply_buf_limited(req, b.p, b.size, off, size);
         free(b.p);
     }
@@ -146,32 +152,29 @@ static struct fuse_lowlevel_ops hello_ll_oper = {
 
 int main(int argc, char *argv[])
 {
-    const char *mountpoint;
+    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+    struct fuse_chan *ch;
+    char *mountpoint;
     int err = -1;
-    int fd;
 
-    if (argc != 2) {
-        fprintf(stderr, "usage: %s mountpoint\n", argv[0]);
-        return 1;
-    }
-    mountpoint = argv[1];
-    fd = fuse_mount(mountpoint, NULL);
-    if (fd != -1) {
+    if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) != -1 &&
+        (ch = fuse_mount(mountpoint, &args)) != NULL) {
         struct fuse_session *se;
 
-        se = fuse_lowlevel_new("debug", &hello_ll_oper, sizeof(hello_ll_oper),
+        se = fuse_lowlevel_new(&args, &hello_ll_oper, sizeof(hello_ll_oper),
                                NULL);
         if (se != NULL) {
-            struct fuse_chan *ch = fuse_kern_chan_new(fd);
-            if (ch != NULL) {
+            if (fuse_set_signal_handlers(se) != -1) {
                 fuse_session_add_chan(se, ch);
                 err = fuse_session_loop(se);
+                fuse_remove_signal_handlers(se);
+                fuse_session_remove_chan(ch);
             }
             fuse_session_destroy(se);
         }
-        close(fd);
+        fuse_unmount(mountpoint, ch);
     }
-    fuse_unmount(mountpoint);
+    fuse_opt_free_args(&args);
 
     return err ? 1 : 0;
 }

@@ -32,21 +32,36 @@ int netfs_maxsymlinks = 12;
 /* libfuse filesystem configuration */
 struct _libfuse_params libfuse_params = { 0 };
 
-/* pointer to the fuse_operations structure of this translator process */
-const struct fuse_operations_compat22 *fuse_ops_compat22 = NULL;
-const struct fuse_operations_compat2 *fuse_ops_compat2 = NULL;
-const struct fuse_operations *fuse_ops25 = NULL;
+/* pointer to the fuse structure of this translator process */
+struct fuse *libfuse_fuse = NULL;
 
-__thread struct fuse_context *libfuse_ctx;
+/* the key for the fuse_context */
+static pthread_key_t libfuse_ctx_key;
 
 /* the port where to write out debug messages to, NULL to omit these */
 FILE *debug_port = NULL;
 
-/* the private data pointer returned from init() callback */
-void *fsys_privdata = NULL;
-
 /* bootstrap fuse translator */
 static int fuse_bootstrap(const char *mountpoint);
+
+
+/* Destroy the fuse_context held as TSD.
+ */
+static void
+fuse_destroy_context(void *data)
+{
+  free(data);
+}
+
+
+/* Create the TSD key.
+ */
+static void
+fuse_create_key(void)
+{
+  int err = pthread_key_create(&libfuse_ctx_key, fuse_destroy_context);
+  assert_perror(err);
+}
 
 
 /* Interpret a __single__ mount option 
@@ -249,45 +264,27 @@ fuse_parse_argv(int argc, char *argv[])
 
 
 
-/* Main function of FUSE. (compatibility one for old Fuse API) */
-int
-fuse_main_compat2(int argc, char *argv[],
-		  const struct fuse_operations_compat2 *op)
-{
-  fuse_parse_argv(argc, argv);
-
-  int fd = fuse_mount_compat22(argv[0], NULL);
-  return (libfuse_params.disable_mt ? fuse_loop : fuse_loop_mt)
-    (fuse_new_compat2(fd, NULL, op));
-}
-
-
-
-/* Main function of FUSE. 
- * named fuse_main_real, since originial fuse.h defines a macro renaming it */
-int 
-fuse_main_real_compat22(int argc, char *argv[],
-			const struct fuse_operations_compat22 *op,
-			size_t op_size)
-{
-  fuse_parse_argv(argc, argv);
-
-  int fd = fuse_mount_compat22(argv[0], NULL);
-  return (libfuse_params.disable_mt ? fuse_loop : fuse_loop_mt)
-    (fuse_new_compat22(fd, NULL, op, op_size));
-}
-
-
 int
 fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
-	       size_t op_size)
+	       size_t op_size, void *user_data)
 {
   fuse_parse_argv(argc, argv);
 
-  int fd = fuse_mount(argv[0], NULL);
+  struct fuse_chan *ch = fuse_mount(argv[0], NULL);
   return (libfuse_params.disable_mt ? fuse_loop : fuse_loop_mt)
-    (fuse_new(fd, NULL, op, op_size));
+    (fuse_new(ch, NULL, op, op_size, user_data));
 }
+
+
+int
+fuse_main_real_compat25(int argc, char *argv[],
+			const struct fuse_operations_compat25 *op,
+			size_t op_size)
+{
+  return fuse_main_real(argc, argv, (const struct fuse_operations *) op,
+			op_size, NULL);
+}
+
 
 #undef fuse_main
 int fuse_main(void);
@@ -299,38 +296,15 @@ int fuse_main(void)
 
 
 /* Create a new FUSE filesystem, actually there's nothing for us to do 
- * on the Hurd.
- *
- * (Compatibility function for the old Fuse API)
- */
-struct fuse *
-fuse_new_compat2(int fd, const char *opts, 
-		 const struct fuse_operations_compat2 *op)
-{
-  if(fd != FUSE_MAGIC)
-    return NULL; 
-
-  if(fuse_parse_opts(opts))
-    return NULL;
-
-  fuse_ops_compat2 = op;
-
-  return (void *) FUSE_MAGIC; /* we don't have a fuse structure, sorry. */
-}
-
-
-
-/* Create a new FUSE filesystem, actually there's nothing for us to do 
  * on the Hurd. Hmm.
  */
 struct fuse *
-fuse_new(int fd, struct fuse_args *args,
-	 const struct fuse_operations *op, size_t op_size)
+fuse_new(struct fuse_chan *ch, struct fuse_args *args,
+	 const struct fuse_operations *op, size_t op_size, void *user_data)
 {
-  (void) op_size; /* FIXME, see what the real Fuse library does with 
-		   * this argument */
+  struct fuse *new;
 
-  if(fd != FUSE_MAGIC)
+  if(ch != (void *) FUSE_MAGIC)
     return NULL; 
 
   if(args && args->allocated)
@@ -341,45 +315,78 @@ fuse_new(int fd, struct fuse_args *args,
 	  return NULL;
     }
 
-  fuse_ops25 = op;
+  new = calloc(1, sizeof *new);
+  if(! new)
+    return NULL;
 
-  if(op->init)
-    fsys_privdata = op->init();
+  switch (op_size)
+    {
+    case sizeof(new->op.ops25):
+      new->version = 25;
+      break;
+    case sizeof(new->op.ops):
+      new->version = 26;
+      break;
+    default:
+      fprintf(stderr, "Unhandled size of fuse_operations: %d\n", op_size);
+      fprintf(stderr, "libfuse will abort now\n");
+      abort();
+    }
+  memcpy(&new->op, op, op_size);
 
-  return (void *) FUSE_MAGIC; /* we don't have a fuse structure, sorry. */
+  /* FIXME: figure out better values for fuse_conn_info fields.  */
+  new->conn.proto_major = FUSE_MAJOR_VERSION;
+  new->conn.proto_minor = FUSE_MINOR_VERSION;
+  new->conn.async_read = 1;
+  new->conn.max_write = UINT_MAX;
+  new->conn.max_readahead = UINT_MAX;
+
+  update_context_struct(NULL, new);
+  fuse_get_context()->private_data = user_data;
+
+  if(new->op.ops.init != NULL)
+    {
+    if (new->version >= 26)
+      new->private_data = new->op.ops.init(&new->conn);
+    else
+      new->private_data = new->op.ops25.init();
+    }
+
+  update_context_struct(NULL, NULL);
+
+  return new;
 }
 
 
-/* Create a new FUSE filesystem, actually there's nothing for us to do 
- * on the Hurd.
- */
 struct fuse *
-fuse_new_compat22(int fd, const char *opts, 
-		  const struct fuse_operations_compat22 *op, size_t op_size)
+fuse_new_compat25(int fd, struct fuse_args *args,
+		  const struct fuse_operations_compat25 *op, size_t op_size)
 {
-  (void) op_size; /* FIXME, see what the real Fuse library does with 
-		   * this argument */
-
-  if(fd != FUSE_MAGIC)
-    return NULL; 
-
-  if(fuse_parse_opts(opts))
-    return NULL;
-
-  fuse_ops_compat22 = op;
-
-  if(op->init)
-    fsys_privdata = op->init();
-
-  return (void *) FUSE_MAGIC; /* we don't have a fuse structure, sorry. */
+  return fuse_new((struct fuse_chan *) fd, args,
+		  (const struct fuse_operations *) op, op_size, NULL);
 }
 
 
 /* Create a new mountpoint for our fuse filesystem, i.e. do the netfs
  * initialization stuff ...
  */
-int 
+struct fuse_chan *
 fuse_mount(const char *mountpoint, struct fuse_args *args)
+{
+  if(args && args->allocated)
+    {
+      int i;
+      for(i = 0; i < args->argc; i ++)
+	if(fuse_parse_opt(args->argv[i]))
+	  return NULL;
+    }
+
+  return (struct fuse_chan *) fuse_bootstrap(mountpoint);
+}
+
+
+int
+fuse_mount_compat25(const char *mountpoint, struct fuse_args *args)
 {
   if(args && args->allocated)
     {
@@ -392,15 +399,6 @@ fuse_mount(const char *mountpoint, struct fuse_args *args)
   return fuse_bootstrap(mountpoint);
 }
 
-
-int 
-fuse_mount_compat22(const char *mountpoint, const char *opts)
-{
-  if(fuse_parse_opts(opts))
-    return 0;
-
-  return fuse_bootstrap(mountpoint);
-}
 
 static int
 fuse_bootstrap(const char *mountpoint)
@@ -476,11 +474,13 @@ fuse_bootstrap(const char *mountpoint)
 int
 fuse_loop(struct fuse *f)
 {
-  if(f != ((void *) FUSE_MAGIC))
+  if(! f)
     return -1; 
 
   static int server_timeout = 1000 * 60 * 10; /* ten minutes, just like in
 					       * init-loop.c of libnetfs */
+
+  libfuse_fuse = f;
 
   ports_manage_port_operations_one_thread(netfs_port_bucket,
 					  netfs_demuxer,
@@ -507,7 +507,7 @@ fuse_demuxer(mach_msg_header_t *inp,
   cmd.inp = inp;
   cmd.outp = outp;
 
-  fuse_proc((void *) FUSE_MAGIC, &cmd, fuse_proc_data);
+  fuse_proc(libfuse_fuse, &cmd, fuse_proc_data);
 
   return cmd.return_value;
 }
@@ -515,7 +515,7 @@ fuse_demuxer(mach_msg_header_t *inp,
 void
 fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 {
-  if(f != ((void *) FUSE_MAGIC)) 
+  if(! f)
     {
       cmd->return_value = -1; 
       return;
@@ -545,13 +545,15 @@ fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data)
   static int server_timeout = 1000 * 60 * 10; /* ten minutes, just like in
 					       * init-loop.c of libnetfs */
 
-  if(f != ((void *) FUSE_MAGIC))
+  if(! f)
     return -1; 
   
   /* copy the provided arguments to global variables to make them available
    * to fuse_demuxer ... */
   fuse_proc = proc;
   fuse_proc_data = data;
+
+  libfuse_fuse = f;
 
   ports_manage_port_operations_multithread(netfs_port_bucket,
 					   fuse_demuxer,
@@ -600,5 +602,39 @@ fuse_exited(struct fuse *f)
 struct fuse_context *
 fuse_get_context(void)
 {
-  return libfuse_ctx;
+  static pthread_once_t libfuse_ctx_key_once = PTHREAD_ONCE_INIT;
+
+  pthread_once(&libfuse_ctx_key_once, fuse_create_key);
+
+  struct fuse_context *ctx = pthread_getspecific(libfuse_ctx_key);
+
+  if(! ctx)
+    {
+      ctx = calloc(1, sizeof(*ctx));
+      if(! ctx)
+	{
+	  fprintf(stderr, "Cannot allocate a new fuse_context\n");
+	  fprintf(stderr, "libfuse will abort now\n");
+	  abort();
+	}
+
+      pthread_setspecific(libfuse_ctx_key, ctx);
+    }
+
+  return ctx;
 }
+
+
+int
+fuse_invalidate(struct fuse *f, const char *path)
+{
+  (void) f;
+  (void) path;
+
+  return -EINVAL;
+}
+
+
+FUSE_SYMVER(".symver fuse_main_real_compat25,fuse_main_real@FUSE_2.5");
+FUSE_SYMVER(".symver fuse_new_compat25,fuse_new@FUSE_2.5");
+FUSE_SYMVER(".symver fuse_mount_compat25,fuse_mount@FUSE_2.5");

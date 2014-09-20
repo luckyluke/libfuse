@@ -87,13 +87,12 @@ fuse_make_netnode(struct netnode *parent, const char *path)
   pthread_rwlock_unlock(&fuse_netnodes_lock);
   DEBUG("netnodes_lock", "releasing pthread_rwlock_rdlock.\n");
 
-  nn = malloc(sizeof(*nn));
+  nn = calloc(1, sizeof(*nn));
   if(! nn)
     return NULL; /* unfortunately we cannot serve a netnode .... */
 
   nn->path = strdup(path);
   nn->parent = parent;
-  nn->node = NULL;
   pthread_mutex_init(&nn->lock, NULL);
 
   DEBUG("netnodes_lock", "aquiring pthread_rwlock_wrlock for %s.\n", path);
@@ -155,11 +154,8 @@ fuse_sync_filesystem(void)
 	  {
 	    if(he->nn->may_need_sync)
 	      {
-		err = -(fuse_ops_compat22 ?
-			fuse_ops_compat22->fsync(he->nn->path, 0,
-						 &he->nn->info.compat22) :
-			fuse_ops_compat2->fsync(he->nn->path, 0));
-		
+		err = -FUSE_OP_CALL(fsync, he->nn->path, 0,
+				    NN_INFO(he));
 		if(err)
 		  goto out;
 		else

@@ -54,27 +54,17 @@ struct fuse_dirhandle {
 static inline void
 refresh_context_struct(struct iouser *cred)
 {
+  update_context_struct(cred, libfuse_fuse);
+}
+
+void
+update_context_struct(struct iouser *cred, struct fuse *fuse)
+{
   FUNC_PROLOGUE("refresh_context_struct");
-  struct fuse_context *ctx = libfuse_ctx;
+  struct fuse_context *ctx = fuse_get_context();
   
-  if(! ctx) 
-    {
-      ctx = malloc(sizeof(struct fuse_context));
-      if(! ctx) 
-	{
-	  perror(PACKAGE_NAME);
-	  return;
-	}
-
-      libfuse_ctx = ctx;
-
-      ctx->fuse = (void *) FUSE_MAGIC;
-      ctx->private_data = fsys_privdata;
-      
-      /* FIXME, how to figure out the pid of the program asking for the
-       * filesystem operation? */
-      ctx->pid = 0;
-    }
+  ctx->fuse = fuse;
+  ctx->private_data = ctx->fuse ? ctx->fuse->private_data : NULL;
 
   if(cred)
     {
@@ -191,7 +181,7 @@ error_t netfs_attempt_readlink (struct iouser *user, struct node *node,
     goto out;
 
   if(FUSE_OP_HAVE(readlink))
-    err = -FUSE_OP_CALL(readlink, node->nn->path, buf, INT_MAX);
+    err = -FUSE_OP_CALL(readlink, node->nn->path, buf, node->nn_stat.st_size + 1);
   else
     err = EOPNOTSUPP;
 
@@ -315,13 +305,13 @@ netfs_attempt_statfs (struct iouser *cred, struct node *node,
 
   else if(FUSE_OP_HAVE(statfs))
     {
+      struct statvfs stvfs;
+
       refresh_context_struct(cred);
+      err = -FUSE_OP_CALL(statfs, node->nn->path, &stvfs);
 
-      if(fuse_ops25)
+      if(! err)
 	{
-	  struct statvfs stvfs;
-	  err = -fuse_ops25->statfs(node->nn->path, &stvfs);
-
 	  st->f_type = stvfs.__f_type;
 	  st->f_bsize = stvfs.f_bsize;
 	  st->f_blocks = stvfs.f_blocks;
@@ -335,15 +325,6 @@ netfs_attempt_statfs (struct iouser *cred, struct node *node,
 	  st->f_frsize = stvfs.f_frsize;
 	  st->f_flag = stvfs.f_flag;
 	}
-
-      else if(fuse_ops_compat22)
-	err = -fuse_ops_compat22->statfs(node->nn->path, st);
-
-      else if(fuse_ops_compat2)
-	err = -fuse_ops_compat2->statfs(node->nn->path, st);
-
-      else
-	assert(0);
     }
 
   else
@@ -590,15 +571,8 @@ netfs_attempt_sync (struct iouser *cred, struct node *node, int wait)
       goto out;
     }
   
-  if(FUSE_OP_HAVE22(fsync))
-    err = -FUSE_OP_CALL22(fsync, node->nn->path, 0, NN_INFO(node));
+  err = -FUSE_OP_CALL(fsync, node->nn->path, 0, NN_INFO(node));
 
-  else if(fuse_ops_compat2)
-    err = -fuse_ops_compat2->fsync(node->nn->path, 0);
-
-  else
-    assert(0);
-        
   if(! err)
     node->nn->may_need_sync = 0; 
 
@@ -1097,29 +1071,13 @@ error_t netfs_attempt_write (struct iouser *cred, struct node *node,
 
   if(FUSE_OP_HAVE(open))
     {
-      if(FUSE_OP_HAVE22(open))
-	err = FUSE_OP_CALL22(open, node->nn->path, NN_INFO(node));
-      
-      else if(fuse_ops_compat2)
-	err = fuse_ops_compat2->open(node->nn->path,
-				     node->nn->info.compat22.flags);
-
-      else
-	assert(0);
+      err = -FUSE_OP_CALL(open, node->nn->path, NN_INFO(node));
 
       if(err) goto out;
     }
 
-  int sz;
-  if(FUSE_OP_HAVE22(write))
-    sz = FUSE_OP_CALL22(write, node->nn->path, data, *len, offset,
+  int sz = FUSE_OP_CALL(write, node->nn->path, data, *len, offset,
 			NN_INFO(node));
-			   
-  else if(fuse_ops_compat2)
-    sz = fuse_ops_compat2->write(node->nn->path, data, *len, offset);
-
-  else
-    assert(0);
 
   /* FIXME: open, flush and release handling probably should be changed
    * completely, I mean, we probably should do fuse_ops->open in 
@@ -1128,21 +1086,11 @@ error_t netfs_attempt_write (struct iouser *cred, struct node *node,
    *
    * This way we wouldn't be able to report any errors back.
    */
-  if(sz >= 0 && FUSE_OP_HAVE22(flush))
-    err = FUSE_OP_CALL22(flush, node->nn->path, NN_INFO(node));
+  if(sz >= 0 && FUSE_OP_HAVE(flush))
+    err = -FUSE_OP_CALL(flush, node->nn->path, NN_INFO(node));
 
   if(FUSE_OP_HAVE(open) && FUSE_OP_HAVE(release))
-    {
-      if(FUSE_OP_HAVE22(release))
-	FUSE_OP_CALL22(release, node->nn->path, NN_INFO(node));
-
-      else if(fuse_ops_compat2)
-	fuse_ops_compat2->release(node->nn->path,
-				  node->nn->info.compat22.flags);
-
-      else
-	assert(0);
-    }
+    FUSE_OP_CALL(release, node->nn->path, NN_INFO(node));
   
   if(sz < 0)
     err = -sz;
@@ -1170,29 +1118,46 @@ netfs_attempt_utimes (struct iouser *cred, struct node *node,
 	 && (err = fshelp_isowner(&node->nn_stat, cred))))
     goto out;
 
-  if(! FUSE_OP_HAVE(utime)) 
+  if(FUSE_OP_HAVE(utimens))
     {
-      err = EOPNOTSUPP;
-      goto out;
+      /* Prepare TS for FUSE_OP_HAVE(utimens) call.  */
+      struct timespec ts[2];
+      ts[0] = atime ? *atime : node->nn_stat.st_atim;
+      ts[1] = mtime ? *mtime : node->nn_stat.st_mtim;
+
+      err = -FUSE_OP_CALL(utimens, node->nn->path, ts);
+
+      if (!err)
+	{
+	  node->nn_stat.st_mtim = ts[1];
+
+	  node->nn_stat.st_atim = ts[0];
+
+	  node->nn->may_need_sync = 1;
+	}
     }
-
-  /* prepare utimebuf for FUSE_OP_HAVE(utime) call */
-  struct utimbuf utb;
-  utb.actime = atime ? atime->tv_sec : node->nn_stat.st_atime;
-  utb.modtime = mtime ? mtime->tv_sec : node->nn_stat.st_mtime;
-
-  err = -FUSE_OP_CALL(utime, node->nn->path, &utb);
-
-  if (! err)
+  else if(FUSE_OP_HAVE(utime))
     {
-      node->nn_stat.st_mtim.tv_sec = utb.modtime;
-      node->nn_stat.st_mtim.tv_nsec = 0;
-      
-      node->nn_stat.st_atim.tv_sec = utb.actime;
-      node->nn_stat.st_atim.tv_nsec = 0;
-	
-      node->nn->may_need_sync = 1;
+      /* Prepare UTB for FUSE_OP_HAVE(utime) call.  */
+      struct utimbuf utb;
+      utb.actime = atime ? atime->tv_sec : node->nn_stat.st_atime;
+      utb.modtime = mtime ? mtime->tv_sec : node->nn_stat.st_mtime;
+
+      err = -FUSE_OP_CALL(utime, node->nn->path, &utb);
+
+      if (!err)
+	{
+	  node->nn_stat.st_mtim.tv_sec = utb.modtime;
+	  node->nn_stat.st_mtim.tv_nsec = 0;
+
+	  node->nn_stat.st_atim.tv_sec = utb.actime;
+	  node->nn_stat.st_atim.tv_nsec = 0;
+
+	  node->nn->may_need_sync = 1;
+	}
     }
+  else
+    err = EOPNOTSUPP;
 
  out:
   FUNC_EPILOGUE(err);
@@ -1222,29 +1187,13 @@ error_t netfs_attempt_read (struct iouser *cred, struct node *node,
 
   if(FUSE_OP_HAVE(open))
     {
-      if(FUSE_OP_HAVE22(open))
-	err = FUSE_OP_CALL22(open, node->nn->path, NN_INFO(node));
-
-      else if(fuse_ops_compat2)
-	err = fuse_ops_compat2->open(node->nn->path,
-				     node->nn->info.compat22.flags);
-
-      else
-	assert(0);
+      err = -FUSE_OP_CALL(open, node->nn->path, NN_INFO(node));
 
       if(err) goto out;
     }
 
-  int sz;
-  if(FUSE_OP_HAVE22(read))
-    sz = FUSE_OP_CALL22(read, node->nn->path, data, *len, offset,
+  int sz = FUSE_OP_CALL(read, node->nn->path, data, *len, offset,
 			NN_INFO(node));
-
-  else if(fuse_ops_compat2)
-    sz = fuse_ops_compat2->read(node->nn->path, data, *len, offset);
-
-  else
-    assert(0);
 
   /* FIXME: open, flush and release handling probably should be changed
    * completely, I mean, we probably should do fuse_ops->open in 
@@ -1253,21 +1202,11 @@ error_t netfs_attempt_read (struct iouser *cred, struct node *node,
    *
    * This way we wouldn't be able to report any errors back.
    */
-  if(sz >= 0 && FUSE_OP_HAVE22(flush))
-    err = FUSE_OP_CALL22(flush, node->nn->path, NN_INFO(node));
+  if(sz >= 0 && FUSE_OP_HAVE(flush))
+    err = -FUSE_OP_CALL(flush, node->nn->path, NN_INFO(node));
 
   if(FUSE_OP_HAVE(open) && FUSE_OP_HAVE(release))
-    {
-      if(FUSE_OP_HAVE22(release))
-	FUSE_OP_CALL22(release, node->nn->path, NN_INFO(node));
-
-      else if(fuse_ops_compat2)
-	fuse_ops_compat2->release(node->nn->path,
-				  node->nn->info.compat22.flags);
-
-      else
-	assert(0);
-    }
+    FUSE_OP_CALL(release, node->nn->path, NN_INFO(node));
 
   if(sz < 0)
     err = -sz;
@@ -1304,8 +1243,8 @@ fuse_get_inode(const char *name)
 {
   struct stat stat;
   
-  assert(FUSE_OP_HAVE22(getattr));
-  FUSE_OP_CALL22(getattr, name, &stat);
+  assert(FUSE_OP_HAVE(getattr));
+  FUSE_OP_CALL(getattr, name, &stat);
 
   return stat.st_ino;
 }
@@ -1406,18 +1345,6 @@ get_dirents_getdir_helper(fuse_dirh_t handle, const char *name,
 }
 
 
-/* callback handler used by netfs_get_dirents to write our dirents
- * to the mmaped memory
- *
- * version for old api
- */
-static int
-get_dirents_getdir_helper_compat(fuse_dirh_t hdl, const char *name, int type)
-{
-  return get_dirents_getdir_helper(hdl, name, type, 0);
-}
-
-
 static error_t
 get_dirents_getdir(struct node *dir, int first_entry, int num_entries, 
 		   char **data, mach_msg_type_number_t *data_len,
@@ -1455,15 +1382,7 @@ get_dirents_getdir(struct node *dir, int first_entry, int num_entries,
   handle->parent = dir->nn;
   handle->hdrpos = (struct dirent*) *data;
 
-  if(FUSE_OP_HAVE22(getdir))
-    FUSE_OP_CALL22(getdir, dir->nn->path, handle, get_dirents_getdir_helper);
-
-  else if(fuse_ops_compat2)
-    fuse_ops_compat2->getdir(dir->nn->path, handle,
-			     get_dirents_getdir_helper_compat);
-  
-  else
-    assert(0);
+  FUSE_OP_CALL(getdir, dir->nn->path, handle, get_dirents_getdir_helper);
 
   *data_len -= handle->size; /* subtract number of bytes left in the
 			      * buffer from the length of the buffer we
@@ -1591,7 +1510,7 @@ get_dirents_readdir(struct node *dir, int first_entry, int num_entries,
   error_t err;
   FUNC_PROLOGUE_NODE("get_dirents_readdir", dir);
 
-  assert(FUSE_OP_HAVE22(readdir));
+  assert(FUSE_OP_HAVE(readdir));
 
   fuse_dirh_t handle;
   if(! (handle = malloc(sizeof(struct fuse_dirhandle))))
@@ -1620,21 +1539,21 @@ get_dirents_readdir(struct node *dir, int first_entry, int num_entries,
   handle->parent = dir->nn;
   handle->hdrpos = (struct dirent*) *data;
 
-  if(FUSE_OP_HAVE22(opendir)
-     && (err = FUSE_OP_CALL22(opendir, dir->nn->path, NN_INFO(dir))))
+  if(FUSE_OP_HAVE(opendir)
+     && (err = -FUSE_OP_CALL(opendir, dir->nn->path, NN_INFO(dir))))
     goto out;
 
-  if((err = FUSE_OP_CALL22(readdir, dir->nn->path, handle, 
-			   get_dirents_readdir_helper,
-			   first_entry, NN_INFO(dir))))
+  if((err = -FUSE_OP_CALL(readdir, dir->nn->path, handle,
+			  get_dirents_readdir_helper,
+			  first_entry, NN_INFO(dir))))
     {
-      if(FUSE_OP_HAVE22(releasedir))
-	FUSE_OP_CALL22(releasedir, dir->nn->path, NN_INFO(dir));
+      if(FUSE_OP_HAVE(releasedir))
+	FUSE_OP_CALL(releasedir, dir->nn->path, NN_INFO(dir));
       goto out;
     }
 
-  if(FUSE_OP_HAVE22(releasedir)
-     && (err = FUSE_OP_CALL22(releasedir, dir->nn->path, NN_INFO(dir))))
+  if(FUSE_OP_HAVE(releasedir)
+     && (err = -FUSE_OP_CALL(releasedir, dir->nn->path, NN_INFO(dir))))
     goto out;
 
   *data_len -= handle->size; /* subtract number of bytes left in the
@@ -1668,7 +1587,7 @@ netfs_get_dirents (struct iouser *cred, struct node *dir,
     goto out;
 
 
-  if(FUSE_OP_HAVE22(readdir))
+  if(FUSE_OP_HAVE(readdir))
     err = get_dirents_readdir(dir, first_entry, num_entries, data, data_len,
 			      data_entries);
 

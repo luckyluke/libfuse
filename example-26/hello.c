@@ -1,10 +1,14 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2004  Miklos Szeredi <miklos@szeredi.hu>
+    Copyright (C) 2001-2006  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
+
+    gcc -Wall `pkg-config fuse --cflags --libs` hello.c -o hello
 */
+
+#define FUSE_USE_VERSION 26
 
 #include <fuse.h>
 #include <stdio.h>
@@ -35,35 +39,41 @@ static int hello_getattr(const char *path, struct stat *stbuf)
     return res;
 }
 
-static int hello_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
+static int hello_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+                         off_t offset, struct fuse_file_info *fi)
 {
+    (void) offset;
+    (void) fi;
+
     if(strcmp(path, "/") != 0)
         return -ENOENT;
 
-    filler(h, ".", 0);
-    filler(h, "..", 0);
-    filler(h, hello_path + 1, 0);
+    filler(buf, ".", NULL, 0);
+    filler(buf, "..", NULL, 0);
+    filler(buf, hello_path + 1, NULL, 0);
 
     return 0;
 }
 
-static int hello_open(const char *path, int flags)
+static int hello_open(const char *path, struct fuse_file_info *fi)
 {
     if(strcmp(path, hello_path) != 0)
         return -ENOENT;
 
-    if((flags & 3) != O_RDONLY)
+    if((fi->flags & 3) != O_RDONLY)
         return -EACCES;
 
     return 0;
 }
 
-static int hello_read(const char *path, char *buf, size_t size, off_t offset)
+static int hello_read(const char *path, char *buf, size_t size, off_t offset,
+                      struct fuse_file_info *fi)
 {
     size_t len;
+    (void) fi;
     if(strcmp(path, hello_path) != 0)
         return -ENOENT;
-    
+
     len = strlen(hello_str);
     if (offset < len) {
         if (offset + size > len)
@@ -77,13 +87,12 @@ static int hello_read(const char *path, char *buf, size_t size, off_t offset)
 
 static struct fuse_operations hello_oper = {
     .getattr	= hello_getattr,
-    .getdir	= hello_getdir,
+    .readdir	= hello_readdir,
     .open	= hello_open,
     .read	= hello_read,
 };
 
 int main(int argc, char *argv[])
 {
-    fuse_main(argc, argv, &hello_oper);
-    return 0;
+    return fuse_main(argc, argv, &hello_oper, NULL);
 }

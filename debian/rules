@@ -1,5 +1,12 @@
 #!/usr/bin/make -f
 
+DEB_HOST_MULTIARCH := $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+# our version
+VERSION = $(shell dpkg-parsechangelog | sed -n 's/^Version: //p')
+# the fuse.pc version
+PKG_CONFIG_VERSION = $(shell env PKG_CONFIG_PATH=$(CURDIR)/debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig pkg-config --modversion fuse)
+
 %:
 	dh $@ --with autoreconf 
 
@@ -12,3 +19,7 @@ override_dh_installchangelogs:
 
 override_dh_strip:
 	dh_strip --dbg-package=libfuse-hurd-dbg
+
+override_dh_gencontrol:
+	dh_gencontrol -plibfuse-dev -- '-v$(PKG_CONFIG_VERSION)+$(VERSION)'
+	dh_gencontrol --remaining-packages

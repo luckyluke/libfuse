@@ -5,6 +5,10 @@ hurd-libfuse (0.0.20140820-0r1) UNRELEASED; urgency=medium
   * Rename libfuse-hurd0 to libfuse-hurd1, as the SONAME has been bumped.
   * Add libfuse-hurd-dbg with debug symbols.
   * Bump Standards-Version to 3.9.6, no changes required.
+  * Add a real libfuse-dev, whose version is based on the FUSE API it
+    implements (taken from the pkg-config file), which depends on
+    libfuse-hurd-dev. This allows libfuse-hurd-dev to satisfy versioned
+    libfuse-dev (build-)dependencies.
 
  -- GNU Hurd Maintainers <debian-hurd@lists.debian.org>  Sat, 20 Sep 2014 10:55:52 +0200
 

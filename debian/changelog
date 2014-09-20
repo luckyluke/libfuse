@@ -1,4 +1,4 @@
-hurd-libfuse (0.0.20140820-0r1) UNRELEASED; urgency=medium
+hurd-libfuse (0.0.20140820-1) experimental; urgency=medium
 
   [ Pino Toscano ]
   * New upstream snapshot.
@@ -17,7 +17,7 @@ hurd-libfuse (0.0.20140820-0r1) UNRELEASED; urgency=medium
     the libtool .la file from debian/tmp, since it is not needed.
   * Add myself to Uploaders.
 
- -- GNU Hurd Maintainers <debian-hurd@lists.debian.org>  Sat, 20 Sep 2014 10:55:52 +0200
+ -- Pino Toscano <pino@debian.org>  Sat, 20 Sep 2014 17:59:09 +0200
 
 hurd-libfuse (0.0.20130220-2) unstable; urgency=low
 

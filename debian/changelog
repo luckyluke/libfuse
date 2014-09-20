@@ -15,6 +15,7 @@ hurd-libfuse (0.0.20140820-0r1) UNRELEASED; urgency=medium
   * Set the shlibs to the current upstream version.
   * Pass --fail-missing to dh_install, to not miss any file installed; remove
     the libtool .la file from debian/tmp, since it is not needed.
+  * Add myself to Uploaders.
 
  -- GNU Hurd Maintainers <debian-hurd@lists.debian.org>  Sat, 20 Sep 2014 10:55:52 +0200
 

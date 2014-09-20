@@ -14,6 +14,14 @@ override_dh_auto_clean:
 	dh_auto_clean
 	rm -f example*/Makefile
 
+override_dh_auto_install:
+	dh_auto_install
+	# no need for libtool files
+	rm -f debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/*.la
+
+override_dh_install:
+	dh_install --fail-missing
+
 override_dh_installchangelogs:
 	dh_installchangelogs -XChangeLog
 

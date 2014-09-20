@@ -1,6 +1,5 @@
 hurd-libfuse (0.0.20140820-1) experimental; urgency=medium
 
-  [ Pino Toscano ]
   * New upstream snapshot.
   * Rename libfuse-hurd0 to libfuse-hurd1, as the SONAME has been bumped.
   * Add libfuse-hurd-dbg with debug symbols.
@@ -17,7 +16,7 @@ hurd-libfuse (0.0.20140820-1) experimental; urgency=medium
     the libtool .la file from debian/tmp, since it is not needed.
   * Add myself to Uploaders.
 
- -- Pino Toscano <pino@debian.org>  Sat, 20 Sep 2014 17:59:09 +0200
+ -- Pino Toscano <pino@debian.org>  Sat, 20 Sep 2014 18:18:32 +0200
 
 hurd-libfuse (0.0.20130220-2) unstable; urgency=low
 

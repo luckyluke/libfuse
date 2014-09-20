@@ -12,6 +12,7 @@ hurd-libfuse (0.0.20140820-0r1) UNRELEASED; urgency=medium
   * Remove extra ${shlibs:Depends} from libfuse-hurd-dev.
   * Update copyright.
   * Make the .install files slightly more specific.
+  * Set the shlibs to the current upstream version.
 
  -- GNU Hurd Maintainers <debian-hurd@lists.debian.org>  Sat, 20 Sep 2014 10:55:52 +0200
 

@@ -13,7 +13,7 @@ Package: libfuse-hurd-dev
 Architecture: hurd-any
 Section: libdevel
 Multi-Arch: same
-Depends: ${shlibs:Depends}, ${misc:Depends}, libfuse-hurd0 (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}, libfuse-hurd1 (= ${binary:Version})
 Provides: libfuse-dev
 Description: Hurd-based FUSE API library - development files
  libfuse aims at providing the FUSE API, thus permitting to run existing FUSE
@@ -21,7 +21,7 @@ Description: Hurd-based FUSE API library - development files
  .
  This package provides development files to build FUSE modules
 
-Package: libfuse-hurd0
+Package: libfuse-hurd1
 Architecture: hurd-any
 Multi-Arch: same
 Depends: ${shlibs:Depends}, ${misc:Depends}

@@ -1,0 +1,4 @@
+# empty on purpose
+libfuse-dev: empty-binary-package
+# empty on purpose
+libfuse-dev: package-contains-no-arch-dependent-files

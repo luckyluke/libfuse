@@ -3,6 +3,7 @@ hurd-libfuse (0.0.20140820-0r1) UNRELEASED; urgency=medium
   [ Pino Toscano ]
   * New upstream snapshot.
   * Rename libfuse-hurd0 to libfuse-hurd1, as the SONAME has been bumped.
+  * Add libfuse-hurd-dbg with debug symbols.
 
  -- GNU Hurd Maintainers <debian-hurd@lists.debian.org>  Sat, 20 Sep 2014 10:55:52 +0200
 

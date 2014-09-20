@@ -31,3 +31,15 @@ Description: Hurd-based FUSE API library - shared library
  backends.
  .
  This package provides the runtime library.
+
+Package: libfuse-hurd-dbg
+Section: debug
+Priority: extra
+Architecture: hurd-any
+Multi-Arch: same
+Depends: libfuse-hurd1 (= ${binary:Version}), ${misc:Depends}
+Description: Hurd-based FUSE API library - debug symbols
+ libfuse aims at providing the FUSE API, thus permitting to run existing FUSE
+ backends.
+ .
+ This package provides the debug symbols.

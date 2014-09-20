@@ -9,3 +9,6 @@ override_dh_auto_clean:
 
 override_dh_installchangelogs:
 	dh_installchangelogs -XChangeLog
+
+override_dh_strip:
+	dh_strip --dbg-package=libfuse-hurd-dbg

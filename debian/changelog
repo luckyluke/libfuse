@@ -1,3 +1,9 @@
+hurd-libfuse (0.0.20140820-2) unstable; urgency=medium
+
+  * Upload to unstable.
+
+ -- Pino Toscano <pino@debian.org>  Wed, 24 Sep 2014 19:55:08 +0200
+
 hurd-libfuse (0.0.20140820-1) experimental; urgency=medium
 
   * New upstream snapshot.

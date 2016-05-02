@@ -1,8 +1,11 @@
-hurd-libfuse (0.0.20140820-3) UNRELEASED; urgency=medium
+hurd-libfuse (0.0.20140820-3) unstable; urgency=medium
 
   * Explicitly build-depend on hurd-dev to fix bootstrapping.
+  * Comment libfuse-dev package for now, it actually gets superseded by the
+    fuse package. We will have to wait for versioned provides in the
+    policy. (Closes: #823068).
 
- -- Samuel Thibault <sthibault@debian.org>  Sat, 27 Feb 2016 13:21:33 +0100
+ -- Samuel Thibault <sthibault@debian.org>  Mon, 02 May 2016 23:53:41 +0000
 
 hurd-libfuse (0.0.20140820-2) unstable; urgency=medium
 

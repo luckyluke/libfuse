@@ -32,5 +32,5 @@ override_dh_makeshlibs:
 	dh_makeshlibs -V
 
 override_dh_gencontrol:
-	dh_gencontrol -plibfuse-dev -- '-v$(PKG_CONFIG_VERSION)+$(VERSION)'
+	#dh_gencontrol -plibfuse-dev -- '-v$(PKG_CONFIG_VERSION)+$(VERSION)'
 	dh_gencontrol --remaining-packages

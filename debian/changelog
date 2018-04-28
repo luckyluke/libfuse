@@ -1,3 +1,9 @@
+hurd-libfuse (0.0.20140820-4) UNRELEASED; urgency=medium
+
+  * Use https URL
+
+ -- Samuel Thibault <sthibault@debian.org>  Sat, 28 Apr 2018 15:23:08 +0200
+
 hurd-libfuse (0.0.20140820-3) unstable; urgency=medium
 
   * Explicitly build-depend on hurd-dev to fix bootstrapping.

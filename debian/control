@@ -7,8 +7,8 @@ Uploaders: Samuel Thibault <sthibault@debian.org>,
 Build-Depends: debhelper (>= 9), hurd-dev, dh-autoreconf, pkg-config
 Standards-Version: 3.9.5
 Homepage: http://www.gnu.org/software/hurd/hurd/libfuse.html
-Vcs-Git: git://anonscm.debian.org/pkg-hurd/libfuse.git
-Vcs-Browser: http://anonscm.debian.org/gitweb/?p=pkg-hurd/libfuse.git
+Vcs-Git: git://anonscm.debian.org/git/pkg-hurd/libfuse.git
+Vcs-Browser: https://anonscm.debian.org/git/pkg-hurd/libfuse.git
 
 Package: libfuse-hurd-dev
 Architecture: hurd-any

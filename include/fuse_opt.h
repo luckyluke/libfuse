@@ -1,15 +1,18 @@
 /*
-    FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2006  Miklos Szeredi <miklos@szeredi.hu>
+  FUSE: Filesystem in Userspace
+  Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
 
-    This program can be distributed under the terms of the GNU LGPL.
-    See the file COPYING.LIB.
+  This program can be distributed under the terms of the GNU LGPLv2.
+  See the file COPYING.LIB.
 */
 
 #ifndef _FUSE_OPT_H_
 #define _FUSE_OPT_H_
 
-/* This file defines the option parsing interface of FUSE */
+/** @file
+ *
+ * This file defines the option parsing interface of FUSE
+ */
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,7 +21,7 @@ extern "C" {
 /**
  * Option description
  *
- * This structure describes a single option, and and action associated
+ * This structure describes a single option, and action associated
  * with it, in case it matches.
  *
  * More than one such match may occur, in which case the action for
@@ -38,7 +41,7 @@ extern "C" {
  *
  *  - 'offsetof(struct foo, member)'  actions i) and iii)
  *
- *  - -1                              action ii)
+ *  - -1			      action ii)
  *
  * The 'offsetof()' macro is defined in the <stddef.h> header.
  *
@@ -49,7 +52,7 @@ extern "C" {
  *
  * The types of templates are:
  *
- * 1) "-x", "-foo", "--foo", "--foo-bar", etc.  These match only
+ * 1) "-x", "-foo", "--foo", "--foo-bar", etc.	These match only
  *   themselves.  Invalid values are "--" and anything beginning
  *   with "-o"
  *
@@ -71,46 +74,46 @@ extern "C" {
  * with scanf().
  */
 struct fuse_opt {
-    /** Matching template and optional parameter formatting */
-    const char *templ;
+	/** Matching template and optional parameter formatting */
+	const char *templ;
 
-    /**
-     * Offset of variable within 'data' parameter of fuse_opt_parse()
-     * or -1
-     */
-    unsigned long offset;
+	/**
+	 * Offset of variable within 'data' parameter of fuse_opt_parse()
+	 * or -1
+	 */
+	unsigned long offset;
 
-    /**
-     * Value to set the variable to, or to be passed as 'key' to the
-     * processing function.  Ignored if template has a format
-     */
-    int value;
+	/**
+	 * Value to set the variable to, or to be passed as 'key' to the
+	 * processing function.	 Ignored if template has a format
+	 */
+	int value;
 };
 
 /**
- * Key option.  In case of a match, the processing function will be
+ * Key option.	In case of a match, the processing function will be
  * called with the specified key.
  */
 #define FUSE_OPT_KEY(templ, key) { templ, -1U, key }
 
 /**
- * Last option.  An array of 'struct fuse_opt' must end with a NULL
+ * Last option.	 An array of 'struct fuse_opt' must end with a NULL
  * template value
  */
-#define FUSE_OPT_END { .templ = NULL }
+#define FUSE_OPT_END { NULL, 0, 0 }
 
 /**
  * Argument list
  */
 struct fuse_args {
-    /** Argument count */
-    int argc;
+	/** Argument count */
+	int argc;
 
-    /** Argument vector.  NULL terminated */
-    char **argv;
+	/** Argument vector.  NULL terminated */
+	char **argv;
 
-    /** Is 'argv' allocated? */
-    int allocated;
+	/** Is 'argv' allocated? */
+	int allocated;
 };
 
 /**
@@ -127,7 +130,7 @@ struct fuse_args {
 /**
  * Key value passed to the processing function for all non-options
  *
- * Non-options are the arguments beginning with a charater other than
+ * Non-options are the arguments beginning with a character other than
  * '-' or all arguments after the special '--' option
  */
 #define FUSE_OPT_KEY_NONOPT  -2
@@ -158,7 +161,7 @@ struct fuse_args {
  *
  * The 'arg' parameter will always contain the whole argument or
  * option including the parameter if exists.  A two-argument option
- * ("-x foo") is always converted to single arguemnt option of the
+ * ("-x foo") is always converted to single argument option of the
  * form "-xfoo" before this function is called.
  *
  * Options of the form '-ofoo' are passed to this function without the
@@ -174,7 +177,7 @@ struct fuse_args {
  * @return -1 on error, 0 if arg is to be discarded, 1 if arg should be kept
  */
 typedef int (*fuse_opt_proc_t)(void *data, const char *arg, int key,
-                               struct fuse_args *outargs);
+			       struct fuse_args *outargs);
 
 /**
  * Option parsing function
@@ -197,7 +200,7 @@ typedef int (*fuse_opt_proc_t)(void *data, const char *arg, int key,
  * @return -1 on error, 0 on success
  */
 int fuse_opt_parse(struct fuse_args *args, void *data,
-                   const struct fuse_opt opts[], fuse_opt_proc_t proc);
+		   const struct fuse_opt opts[], fuse_opt_proc_t proc);
 
 /**
  * Add an option to a comma separated option list
@@ -207,6 +210,15 @@ int fuse_opt_parse(struct fuse_args *args, void *data,
  * @return -1 on allocation error, 0 on success
  */
 int fuse_opt_add_opt(char **opts, const char *opt);
+
+/**
+ * Add an option, escaping commas, to a comma separated option list
+ *
+ * @param opts is a pointer to an option list, may point to a NULL value
+ * @param opt is the option to add
+ * @return -1 on allocation error, 0 on success
+ */
+int fuse_opt_add_opt_escaped(char **opts, const char *opt);
 
 /**
  * Add an argument to a NULL terminated argument vector
@@ -222,7 +234,7 @@ int fuse_opt_add_arg(struct fuse_args *args, const char *arg);
  * argument vector
  *
  * Adds the argument to the N-th position.  This is useful for adding
- * options at the beggining of the array which must not come after the
+ * options at the beginning of the array which must not come after the
  * special '--' option.
  *
  * @param args is the structure containing the current argument list

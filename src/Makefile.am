@@ -11,7 +11,8 @@ libfuse_la_SOURCES = 	\
 	main.c		\
 	netfs.c		\
 	netnode.c	\
-	node.c
+	node.c		\
+	fuse_opt.c
 
 noinst_HEADERS = \
 	fuse_i.h

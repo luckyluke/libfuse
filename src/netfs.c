@@ -15,6 +15,7 @@
 #  include <config.h>
 #endif
 
+#include <assert.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <dirent.h>

@@ -15,6 +15,7 @@
 #  include <config.h>
 #endif
 
+#include <assert.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <error.h>
@@ -53,6 +54,10 @@ fuse_destroy_context(void *data)
   free(data);
 }
 
+void fuse_destroy(struct fuse *f)
+{
+  NOT_IMPLEMENTED();
+}
 
 /* Create the TSD key.
  */
@@ -256,23 +261,49 @@ fuse_parse_argv(int argc, char *argv[])
 
       exit(opt_help == stdout ? 0 : 1);
     }
-
-  /* chop off the consumed args */
-  argv[0] = argv[optind];
-  argv[1] = NULL;
 }
 
 
+int fuse_parse_cmdline(struct fuse_args *args, char **mountpoint,
+                       int *multithreaded, int *foreground)
+{
+  if (args->argc < 2)
+    return -1;
+
+  fuse_parse_argv(args->argc, args->argv);
+  *mountpoint = args->argv[optind];
+  *multithreaded = !libfuse_params.disable_mt;
+  *foreground = libfuse_params.foreground;
+
+  return 0;
+}
 
 int
 fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	       size_t op_size, void *user_data)
 {
-  fuse_parse_argv(argc, argv);
+  struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+  char *mnt;
+  int fg, mt;
+  struct fuse *fs;
 
-  struct fuse_chan *ch = fuse_mount(argv[0], NULL);
-  return (libfuse_params.disable_mt ? fuse_loop : fuse_loop_mt)
-    (fuse_new(ch, NULL, op, op_size, user_data));
+  if (fuse_parse_cmdline(&args, &mnt, &mt, &fg))
+    return -1;
+
+  struct fuse_chan *ch = fuse_mount(mnt, NULL);
+  if (!ch)
+    return -2;
+
+  fs = fuse_new(ch, NULL, op, op_size, user_data);
+  if (!fs)
+    {
+      fuse_unmount(mnt, ch);
+      return -3;
+    }
+
+  fuse_daemonize(fg);
+
+  return (libfuse_params.disable_mt ? fuse_loop : fuse_loop_mt)(fs);
 }
 
 
@@ -306,14 +337,6 @@ fuse_new(struct fuse_chan *ch, struct fuse_args *args,
 
   if(ch != (void *) FUSE_MAGIC)
     return NULL; 
-
-  if(args && args->allocated)
-    {
-      int i;
-      for(i = 0; i < args->argc; i ++)
-	if(fuse_parse_opt(args->argv[i]))
-	  return NULL;
-    }
 
   new = calloc(1, sizeof *new);
   if(! new)
@@ -373,17 +396,14 @@ fuse_new_compat25(int fd, struct fuse_args *args,
 struct fuse_chan *
 fuse_mount(const char *mountpoint, struct fuse_args *args)
 {
-  if(args && args->allocated)
-    {
-      int i;
-      for(i = 0; i < args->argc; i ++)
-	if(fuse_parse_opt(args->argv[i]))
-	  return NULL;
-    }
-
   return (struct fuse_chan *) fuse_bootstrap(mountpoint);
 }
 
+void fuse_unmount(const char *mountpoint, struct fuse_chan *ch)
+{
+  // goaway
+  NOT_IMPLEMENTED();
+}
 
 int
 fuse_mount_compat25(const char *mountpoint, struct fuse_args *args)
@@ -479,7 +499,6 @@ fuse_loop(struct fuse *f)
 
   static int server_timeout = 1000 * 60 * 10; /* ten minutes, just like in
 					       * init-loop.c of libnetfs */
-
   libfuse_fuse = f;
 
   ports_manage_port_operations_one_thread(netfs_port_bucket,
@@ -624,6 +643,44 @@ fuse_get_context(void)
   return ctx;
 }
 
+struct fuse_session *fuse_get_session(struct fuse *f)
+{
+  NOT_IMPLEMENTED();
+  return NULL;
+}
+
+int fuse_daemonize(int foreground)
+{
+  if (!foreground)
+    {
+      int nullfd;
+
+      /* It seems that forking here causes some trouble. Just setsid() and let
+       * the fork happen in fuse_bootstrap() */
+      if (setsid() == -1)
+	{
+	  perror("fuse_daemonize: setsid");
+	  return -1;
+	}
+
+      nullfd = open("/dev/null", O_RDWR, 0);
+      if (nullfd != -1)
+	{
+	  (void) dup2(nullfd, 0);
+	  (void) dup2(nullfd, 1);
+	  (void) dup2(nullfd, 2);
+	  if (nullfd > 2)
+	    close(nullfd);
+	}
+
+      (void) chdir("/");
+    }
+  else
+    {
+      (void) chdir("/");
+    }
+  return 0;
+}
 
 int
 fuse_invalidate(struct fuse *f, const char *path)
@@ -634,6 +691,16 @@ fuse_invalidate(struct fuse *f, const char *path)
   return -EINVAL;
 }
 
+int fuse_set_signal_handlers(struct fuse_session *se)
+{
+  NOT_IMPLEMENTED();
+  return 0;
+}
+
+void fuse_remove_signal_handlers(struct fuse_session *se)
+{
+  NOT_IMPLEMENTED();
+}
 
 FUSE_SYMVER(".symver fuse_main_real_compat25,fuse_main_real@FUSE_2.5");
 FUSE_SYMVER(".symver fuse_new_compat25,fuse_new@FUSE_2.5");
